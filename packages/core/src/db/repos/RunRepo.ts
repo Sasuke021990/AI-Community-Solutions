@@ -46,6 +46,17 @@ export class RunRepo {
   public get(id: string): Run | null {
     const row = this.db.prepare('SELECT * FROM runs WHERE id = ?').get(id) as RunRow | undefined;
     if (!row) return null;
+    return this.mapRow(row);
+  }
+
+  public listBySpace(spaceId: string): Run[] {
+    const rows = this.db
+      .prepare('SELECT * FROM runs WHERE space_id = ? ORDER BY started_at DESC')
+      .all(spaceId) as RunRow[];
+    return rows.map((r) => this.mapRow(r));
+  }
+
+  private mapRow(row: RunRow): Run {
     return {
       id: row.id,
       spaceId: row.space_id,

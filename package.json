@@ -7,8 +7,10 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify": "npm run lint && npm run typecheck && npm run build && npm test"
   },
   "devDependencies": {
     "eslint": "^9.0.0",

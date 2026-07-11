@@ -166,6 +166,30 @@ describe('Database and Repositories Integration', () => {
     })).not.toThrow();
   });
 
+  it('listBySpace returns a space\'s runs newest-first, excluding other spaces', () => {
+    const spaceId = randomUUID();
+    spaceRepo.create({
+      id: spaceId, name: 'S', description: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    const otherSpaceId = randomUUID();
+    spaceRepo.create({
+      id: otherSpaceId, name: 'Other', description: 'O', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+
+    const run1Id = randomUUID();
+    runRepo.create({ id: run1Id, spaceId, problem: 'first', status: RunStatus.Running, roundsUsed: 0, startedAt: 1000 });
+    runRepo.markInterrupted();
+    const run2Id = randomUUID();
+    runRepo.create({ id: run2Id, spaceId, problem: 'second', status: RunStatus.Running, roundsUsed: 0, startedAt: 2000 });
+    runRepo.markInterrupted();
+    runRepo.create({ id: randomUUID(), spaceId: otherSpaceId, problem: 'other', status: RunStatus.Running, roundsUsed: 0, startedAt: 1500 });
+
+    const runs = runRepo.listBySpace(spaceId);
+    expect(runs.map(r => r.id)).toEqual([run2Id, run1Id]);
+  });
+
   it('run events auto-assign incrementing seq per run and list in order', () => {
     const spaceId = randomUUID();
     spaceRepo.create({
