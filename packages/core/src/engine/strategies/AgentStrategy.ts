@@ -1,4 +1,5 @@
-import { Agent, Run, Space, RunEventType } from '../../domain/types.js';
+import { Agent, Run, Space } from '../../domain/types.js';
+import { RunEventType } from '../../domain/enums.js';
 import { McpClientWrapper } from '../../mcp/McpClient.js';
 import { LmStudioClient, ConcurrencyLimiter, ChatMessage } from '../../llm/index.js';
 
@@ -10,7 +11,7 @@ export interface ExecutionState {
   lmStudioClient: LmStudioClient;
   concurrencyLimiter: ConcurrencyLimiter;
   messages: ChatMessage[];
-  onEvent: (event: { type: RunEventType, payload: unknown, agentId?: string }) => void;
+  onEvent: (event: { type: RunEventType, payload: Record<string, unknown>, agentId?: string }) => void;
   signal?: AbortSignal;
 }
 

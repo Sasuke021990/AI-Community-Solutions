@@ -14,10 +14,17 @@ export class McpClientWrapper {
   public async connect(): Promise<void> {
     if (this.config.transport === 'stdio') {
       if (!this.config.command) throw new Error('Stdio transport requires a command');
+      const mergedEnv: Record<string, string> = {};
+      for (const [k, v] of Object.entries(process.env)) {
+        if (v !== undefined) mergedEnv[k] = v;
+      }
+      if (this.config.env) {
+        Object.assign(mergedEnv, this.config.env);
+      }
       this.transport = new StdioClientTransport({
         command: this.config.command,
         args: this.config.args ? Object.values(this.config.args) : [],
-        env: { ...process.env, ...this.config.env }
+        env: mergedEnv
       });
     } else if (this.config.transport === 'http') {
       if (!this.config.url) throw new Error('HTTP transport requires a URL');
@@ -33,7 +40,7 @@ export class McpClientWrapper {
     return await this.client.listTools();
   }
 
-  public async callTool(name: string, args: unknown) {
+  public async callTool(name: string, args: Record<string, unknown>) {
     return await this.client.callTool({ name, arguments: args });
   }
 

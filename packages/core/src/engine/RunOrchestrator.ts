@@ -35,7 +35,6 @@ export class RunOrchestrator {
         this.runEventRepo.append({
           id: randomUUID(),
           runId: run.id,
-          seq: this.state.messages.length + 1, // simplified seq
           type: e.type,
           agentId: e.agentId,
           payload: e.payload,

@@ -61,8 +61,8 @@ export class OrchestratorStrategy implements AgentStrategy {
           for (const mcp of state.mcpClients) {
             const mcpTools = await mcp.listTools();
             if (mcpTools.tools.some(t => t.name === tc.function.name)) {
-              const res = await mcp.callTool(tc.function.name, args);
-              resultStr = res.content.map(c => c.type === 'text' ? c.text : '').join('\n');
+              const res = await mcp.callTool(tc.function.name, args as Record<string, unknown>);
+              resultStr = (res.content as { type: string; text?: string }[]).map(c => c.type === 'text' ? c.text : '').join('\n');
               handled = true;
               break;
             }
