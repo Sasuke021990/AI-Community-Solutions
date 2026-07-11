@@ -7,7 +7,10 @@ export class McpClientWrapper {
   private client: Client;
   private transport?: StdioClientTransport | SSEClientTransport;
 
-  constructor(private config: McpServerConfig) {
+  constructor(
+    private config: McpServerConfig,
+    private toolTimeoutMs: number = 60_000
+  ) {
     this.client = new Client({ name: 'acs-core', version: '0.1.0' }, { capabilities: {} });
   }
 
@@ -27,7 +30,7 @@ export class McpClientWrapper {
       }
       this.transport = new StdioClientTransport({
         command: this.config.command,
-        args: this.config.args ? Object.values(this.config.args) : [],
+        args: this.config.args ?? [],
         env: mergedEnv
       });
     } else if (this.config.transport === 'http') {
@@ -45,7 +48,34 @@ export class McpClientWrapper {
   }
 
   public async callTool(name: string, args: Record<string, unknown>) {
-    return await this.client.callTool({ name, arguments: args });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`Tool call "${name}" timed out after ${this.toolTimeoutMs}ms`)),
+        this.toolTimeoutMs
+      );
+    });
+    try {
+      return await Promise.race([this.client.callTool({ name, arguments: args }), timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Connects, lists tools, and disconnects — used by the registry UI's
+   * "Test connection" action. Never throws; returns a structured result.
+   */
+  public async testConnection(): Promise<{ ok: boolean; tools?: string[]; error?: string }> {
+    try {
+      await this.connect();
+      const { tools } = await this.listTools();
+      return { ok: true, tools: tools.map((t) => t.name) };
+    } catch (e: unknown) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    } finally {
+      await this.close().catch(() => {});
+    }
   }
 
   public async close() {

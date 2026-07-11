@@ -13,3 +13,11 @@ export type { Repositories } from './db/factory.js';
 
 // LM Studio client
 export * from './llm/index.js';
+
+// MCP client
+export * from './mcp/McpClient.js';
+
+// Execution engine
+export { RunOrchestrator } from './engine/RunOrchestrator.js';
+export type { PersistedRunEvent } from './engine/RunOrchestrator.js';
+export * from './engine/strategies/index.js';
