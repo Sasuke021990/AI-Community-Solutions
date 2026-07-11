@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { Space, Agent, McpServerConfig, RoleTemplate } from '@acs/core';
+import type { Agent, McpServerConfig, RoleTemplate, Space } from '@acs/core';
+import type { SpaceWithActivity } from '../../../preload/index.js';
 import { call } from '../lib/api.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { AgentEditor } from '../components/AgentEditor.js';
@@ -14,6 +15,7 @@ interface SpaceBuilderScreenProps {
   spaceId: string | null;
   onCreated: (id: string) => void;
   onOpenRun: (spaceId: string) => void;
+  onPublished: () => void;
   onBack: () => void;
 }
 
@@ -46,8 +48,8 @@ const emptyForm: SpaceForm = {
   allowedMcpServerIds: []
 };
 
-export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onBack }: SpaceBuilderScreenProps) {
-  const [space, setSpace] = useState<Space | null>(null);
+export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished, onBack }: SpaceBuilderScreenProps) {
+  const [space, setSpace] = useState<SpaceWithActivity | null>(null);
   const [form, setForm] = useState<SpaceForm>(emptyForm);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
@@ -59,6 +61,9 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onBack }: Sp
   const [saving, setSaving] = useState(false);
   const [publishIssues, setPublishIssues] = useState<{ field?: string; message: string }[] | null>(null);
   const [editingAgent, setEditingAgent] = useState<Agent | 'new' | null>(null);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   async function loadModels() {
     try {
@@ -93,6 +98,12 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onBack }: Sp
   }, []);
 
   useEffect(() => {
+    // Every time we land on a different Space (including right after
+    // creating one), the details form starts collapsed - not on every
+    // incidental refresh triggered by agent edits or Save changes.
+    setDetailsExpanded(false);
+    setConfirmPublish(false);
+    setPublishIssues(null);
     if (spaceId) {
       loadAll(spaceId);
     } else {
@@ -144,19 +155,25 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onBack }: Sp
     }
   }
 
-  async function publish() {
+  async function confirmAndPublish() {
     if (!space) return;
+    setPublishing(true);
     setError(null);
     setPublishIssues(null);
     try {
       const result = await call(window.acs.spaces.publish(space.id));
       if (!result.success) {
         setPublishIssues(result.issues);
+        setConfirmPublish(false);
         return;
       }
-      await loadAll(space.id);
+      setConfirmPublish(false);
+      onPublished();
     } catch (e) {
       setError((e as Error).message);
+      setConfirmPublish(false);
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -206,6 +223,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onBack }: Sp
 
   const isPublished = space?.status === 'published';
   const sortedAgents = [...agents].sort((a, b) => a.position - b.position);
+  const strategyLabel = STRATEGIES.find((s) => s.value === form.strategy)?.label;
 
   return (
     <div>
@@ -216,15 +234,20 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onBack }: Sp
           </button>
           <h1>{space ? space.name : 'New Space'}</h1>
           {space && <StatusBadge status={space.status} />}
+          {space?.hasActiveRun && <span className="badge badge-running">running</span>}
         </div>
         {isPublished && space && (
           <div className="row">
             <button className="btn btn-primary" onClick={() => onOpenRun(space.id)}>
               Run this Space
             </button>
-            <button className="btn" onClick={unpublish}>
-              Unpublish to edit
-            </button>
+            {space.hasActiveRun ? (
+              <span className="field-hint">Unpublish disabled while a run is active.</span>
+            ) : (
+              <button className="btn" onClick={unpublish}>
+                Unpublish to edit
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -242,110 +265,128 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onBack }: Sp
       )}
       {modelsError && <div className="banner banner-error">Could not load models: {modelsError}</div>}
 
-      <div className="card" style={{ maxWidth: 560, marginBottom: 20 }}>
-        <div className="field">
-          <label>Name</label>
-          <input
-            type="text"
-            value={form.name}
-            disabled={isPublished}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-        </div>
-        <div className="field">
-          <label>Description</label>
-          <textarea
-            value={form.description}
-            disabled={isPublished}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            rows={2}
-          />
-        </div>
-        <div className="field">
-          <label>Coordination strategy</label>
-          <select
-            value={form.strategy}
-            disabled={isPublished}
-            onChange={(e) => setForm({ ...form, strategy: e.target.value as Space['strategy'] })}
-          >
-            {STRATEGIES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <div className="field-hint">{STRATEGIES.find((s) => s.value === form.strategy)?.hint}</div>
-        </div>
-        <div className="field">
+      {space && !isPublished && !detailsExpanded ? (
+        <div className="card" style={{ maxWidth: 560, marginBottom: 20 }}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <label style={{ margin: 0 }}>Default model</label>
-            <button type="button" className="btn-link" onClick={loadModels}>
-              Refresh
+            <div>
+              <strong>{space.name}</strong>
+              <div className="field-hint">
+                {strategyLabel} · {form.defaultModel || 'no default model set'} · max {form.maxRounds} round(s)
+              </div>
+            </div>
+            <button className="btn-link" onClick={() => setDetailsExpanded(true)}>
+              Edit details
             </button>
           </div>
-          <select
-            value={form.defaultModel}
-            disabled={isPublished}
-            onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
-          >
-            <option value="">Select a model...</option>
-            {models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-          {form.defaultModel && models.length > 0 && !models.includes(form.defaultModel) && (
-            <div className="field-error">This model is no longer available in LM Studio.</div>
-          )}
         </div>
-        <div className="field">
-          <label>Max rounds</label>
-          <input
-            type="number"
-            min={1}
-            max={50}
-            value={form.maxRounds}
-            disabled={isPublished}
-            onChange={(e) => setForm({ ...form, maxRounds: Number(e.target.value) })}
-          />
-        </div>
-        <div className="field">
-          <label>Allowed MCP servers</label>
-          <div className="checkbox-list">
-            {mcpServers.length === 0 && <div className="field-hint">No MCP servers registered yet.</div>}
-            {mcpServers.map((m) => (
-              <label key={m.id}>
-                <input
-                  type="checkbox"
-                  disabled={isPublished}
-                  checked={form.allowedMcpServerIds.includes(m.id)}
-                  onChange={() => toggleMcp(m.id)}
-                />
-                {m.name}
-              </label>
-            ))}
+      ) : (
+        <div className="card" style={{ maxWidth: 560, marginBottom: 20 }}>
+          <div className="field">
+            <label>Name</label>
+            <input
+              type="text"
+              value={form.name}
+              disabled={isPublished}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
           </div>
-        </div>
-
-        {!isPublished && (
-          <div className="row">
-            <button className="btn btn-primary" onClick={space ? saveSpace : createSpace} disabled={saving}>
-              {saving ? 'Saving...' : space ? 'Save changes' : 'Create Space'}
-            </button>
-            {space && (
-              <button className="btn" onClick={publish}>
-                Publish
+          <div className="field">
+            <label>Description</label>
+            <textarea
+              value={form.description}
+              disabled={isPublished}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={2}
+            />
+          </div>
+          <div className="field">
+            <label>Coordination strategy</label>
+            <select
+              value={form.strategy}
+              disabled={isPublished}
+              onChange={(e) => setForm({ ...form, strategy: e.target.value as Space['strategy'] })}
+            >
+              {STRATEGIES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <div className="field-hint">{strategyLabel && STRATEGIES.find((s) => s.value === form.strategy)?.hint}</div>
+          </div>
+          <div className="field">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <label style={{ margin: 0 }}>Default model</label>
+              <button type="button" className="btn-link" onClick={loadModels}>
+                Refresh
               </button>
+            </div>
+            <select
+              value={form.defaultModel}
+              disabled={isPublished}
+              onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
+            >
+              <option value="">Select a model...</option>
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            {form.defaultModel && models.length > 0 && !models.includes(form.defaultModel) && (
+              <div className="field-error">This model is no longer available in LM Studio.</div>
             )}
           </div>
-        )}
-      </div>
+          <div className="field">
+            <label>Max rounds</label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={form.maxRounds}
+              disabled={isPublished}
+              onChange={(e) => setForm({ ...form, maxRounds: Number(e.target.value) })}
+            />
+          </div>
+          <div className="field">
+            <label>Allowed MCP servers</label>
+            <div className="checkbox-list">
+              {mcpServers.length === 0 && <div className="field-hint">No MCP servers registered yet.</div>}
+              {mcpServers.map((m) => (
+                <label key={m.id}>
+                  <input
+                    type="checkbox"
+                    disabled={isPublished}
+                    checked={form.allowedMcpServerIds.includes(m.id)}
+                    onChange={() => toggleMcp(m.id)}
+                  />
+                  {m.name}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {!isPublished && (
+            <div className="row">
+              <button className="btn btn-primary" onClick={space ? saveSpace : createSpace} disabled={saving}>
+                {saving ? 'Saving...' : space ? 'Save changes' : 'Create Space'}
+              </button>
+              {space && (
+                <button className="btn-link" onClick={() => setDetailsExpanded(false)}>
+                  Hide details
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {space && (
         <>
-          <div className="section-title">
-            Agents {sortedAgents.length > 8 && <span style={{ color: 'var(--warning)' }}>({sortedAgents.length} - consider fewer for local hardware)</span>}
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <div className="section-title" style={{ margin: '20px 0 8px' }}>
+              Agents {sortedAgents.length > 8 && <span style={{ color: 'var(--warning)' }}>({sortedAgents.length} - consider fewer for local hardware)</span>}
+            </div>
           </div>
 
           {sortedAgents.map((agent, i) =>
@@ -413,9 +454,28 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onBack }: Sp
           )}
 
           {!isPublished && editingAgent === null && (
-            <button className="btn" onClick={() => setEditingAgent('new')}>
-              Add agent
-            </button>
+            <div className="row">
+              <button className="btn" onClick={() => setEditingAgent('new')}>
+                Add agent
+              </button>
+              <button className="btn btn-primary" onClick={() => setConfirmPublish(true)}>
+                Publish
+              </button>
+            </div>
+          )}
+
+          {confirmPublish && (
+            <div className="banner banner-info" style={{ marginTop: 12 }}>
+              Publish this Space? Agents and settings will be locked until you unpublish.
+              <div className="row" style={{ marginTop: 8 }}>
+                <button className="btn btn-primary" onClick={confirmAndPublish} disabled={publishing}>
+                  {publishing ? 'Publishing...' : 'Confirm publish'}
+                </button>
+                <button className="btn" onClick={() => setConfirmPublish(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
         </>
       )}

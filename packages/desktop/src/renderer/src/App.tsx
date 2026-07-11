@@ -33,6 +33,7 @@ function App() {
           spaceId={view.spaceId}
           onCreated={(id) => setView({ name: 'builder', spaceId: id })}
           onOpenRun={(spaceId) => setView({ name: 'run', spaceId })}
+          onPublished={() => setView({ name: 'spaces' })}
           onBack={() => setView({ name: 'spaces' })}
         />
       );

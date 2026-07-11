@@ -10,6 +10,9 @@ import type {
   RoleTemplate
 } from '@acs/core';
 import type { Settings, SettingsPatch } from '../main/SettingsStore.js';
+import type { SpaceWithActivity } from '../main/ipcRouter.js';
+
+export type { SpaceWithActivity } from '../main/ipcRouter.js';
 
 function invoke<T>(channelName: string, payload: unknown = {}): Promise<IpcResult<T>> {
   return ipcRenderer.invoke(channelName, payload);
@@ -77,9 +80,9 @@ const api = {
     test: (input: McpServerInput) => invoke<TestConnectionResult>(Channels.mcpTest.name, input)
   },
   spaces: {
-    list: () => invoke<Space[]>(Channels.spacesList.name),
-    get: (id: string) => invoke<Space | null>(Channels.spacesGet.name, { id }),
-    create: (input: SpaceInput) => invoke<Space>(Channels.spacesCreate.name, input),
+    list: () => invoke<SpaceWithActivity[]>(Channels.spacesList.name),
+    get: (id: string) => invoke<SpaceWithActivity | null>(Channels.spacesGet.name, { id }),
+    create: (input: SpaceInput) => invoke<SpaceWithActivity>(Channels.spacesCreate.name, input),
     update: (input: SpaceInput & { id: string }) => invoke<void>(Channels.spacesUpdate.name, input),
     delete: (id: string) => invoke<void>(Channels.spacesDelete.name, { id }),
     publish: (id: string) => invoke<PublishResult>(Channels.spacesPublish.name, { id }),

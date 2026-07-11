@@ -1,9 +1,16 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { Repositories, LmStudioClient, McpClientWrapper, SpaceStatus, listRoleTemplates, renderRoleTemplate } from '@acs/core';
+import { Repositories, LmStudioClient, McpClientWrapper, Space, SpaceStatus, listRoleTemplates, renderRoleTemplate } from '@acs/core';
 import { Channels, IpcResult } from '../shared/ipc.js';
 import { RunManager } from './RunManager.js';
 import { SettingsStore } from './SettingsStore.js';
+
+/**
+ * hasActiveRun is deliberately NOT part of @acs/core's Space type - it's a
+ * fact from joining against the runs table, not a property of a Space, so
+ * it's attached only at the IPC response boundary.
+ */
+export type SpaceWithActivity = Space & { hasActiveRun: boolean };
 
 export interface IpcRouterDeps {
   repos: Repositories;
@@ -28,6 +35,11 @@ function fail(e: unknown): IpcResult<never> {
 
 export function createIpcRouter(deps: IpcRouterDeps) {
   const { repos, getLmStudioClient, runManager, settingsStore } = deps;
+
+  const withActivity = (space: Space): SpaceWithActivity => ({
+    ...space,
+    hasActiveRun: repos.runs.hasActiveRun(space.id)
+  });
 
   const handlers: Record<string, Handler> = {
     [Channels.mcpList.name]: async () => repos.mcpServers.list(),
@@ -58,11 +70,12 @@ export function createIpcRouter(deps: IpcRouterDeps) {
       return client.testConnection();
     },
 
-    [Channels.spacesList.name]: async () => repos.spaces.list(),
+    [Channels.spacesList.name]: async () => repos.spaces.list().map(withActivity),
 
     [Channels.spacesGet.name]: async (p) => {
       const { id } = Channels.spacesGet.requestSchema.parse(p);
-      return repos.spaces.get(id);
+      const space = repos.spaces.get(id);
+      return space ? withActivity(space) : null;
     },
 
     [Channels.spacesCreate.name]: async (p) => {
@@ -70,7 +83,7 @@ export function createIpcRouter(deps: IpcRouterDeps) {
       const now = Date.now();
       const space = { id: randomUUID(), status: SpaceStatus.Draft, createdAt: now, updatedAt: now, ...input };
       repos.spaces.create(space);
-      return space;
+      return withActivity(space);
     },
 
     [Channels.spacesUpdate.name]: async (p) => {

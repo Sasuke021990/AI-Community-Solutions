@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Agent, RoleTemplate, Strategy } from '@acs/core';
 import { call } from '../lib/api.js';
 
@@ -34,6 +34,11 @@ export function AgentEditor({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    nameInputRef.current?.focus();
+  }, []);
 
   async function applyTemplate(id: string) {
     setTemplateId(id);
@@ -87,7 +92,13 @@ export function AgentEditor({
 
       <div className="field">
         <label>Agent name</label>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Researcher" />
+        <input
+          ref={nameInputRef}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Researcher"
+        />
       </div>
 
       <div className="field">

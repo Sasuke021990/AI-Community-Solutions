@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Space } from '@acs/core';
+import type { SpaceWithActivity } from '../../../preload/index.js';
 import { call } from '../lib/api.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 
@@ -9,10 +9,10 @@ interface SpacesHomeScreenProps {
 }
 
 export function SpacesHomeScreen({ onOpenBuilder, onOpenRun }: SpacesHomeScreenProps) {
-  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [spaces, setSpaces] = useState<SpaceWithActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<Space | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<SpaceWithActivity | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -80,9 +80,26 @@ export function SpacesHomeScreen({ onOpenBuilder, onOpenRun }: SpacesHomeScreenP
             <div key={s.id} className="card card-clickable" onClick={() => (s.status === 'published' ? onOpenRun(s.id) : onOpenBuilder(s.id))}>
               <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
                 <strong>{s.name}</strong>
-                <StatusBadge status={s.status} />
+                <div className="row" style={{ gap: 4 }}>
+                  <StatusBadge status={s.status} />
+                  {s.hasActiveRun && <span className="badge badge-running">running</span>}
+                </div>
               </div>
               <div style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 10 }}>{s.description || 'No description'}</div>
+
+              {s.status === 'published' && (
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', marginBottom: 8 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenRun(s.id);
+                  }}
+                >
+                  Run Space
+                </button>
+              )}
+
               <div className="row">
                 <button
                   className="btn-link"
@@ -93,15 +110,17 @@ export function SpacesHomeScreen({ onOpenBuilder, onOpenRun }: SpacesHomeScreenP
                 >
                   {s.status === 'published' ? 'View' : 'Edit'}
                 </button>
-                <button
-                  className="btn-link"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirmDelete(s);
-                  }}
-                >
-                  Delete
-                </button>
+                {!s.hasActiveRun && (
+                  <button
+                    className="btn-link"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDelete(s);
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))}

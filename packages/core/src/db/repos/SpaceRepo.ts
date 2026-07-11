@@ -50,6 +50,7 @@ export class SpaceRepo {
   }
 
   public delete(id: string): void {
+    this.assertNoActiveRun(id, 'delete');
     this.db.prepare('DELETE FROM spaces WHERE id = ?').run(id);
   }
 
@@ -69,6 +70,7 @@ export class SpaceRepo {
   }
 
   public unpublish(id: string): void {
+    this.assertNoActiveRun(id, 'unpublish');
     this.db.prepare('UPDATE spaces SET status = ?, updated_at = ? WHERE id = ?').run(SpaceStatus.Draft, Date.now(), id);
   }
 
@@ -81,6 +83,13 @@ export class SpaceRepo {
   public list(): Space[] {
     const rows = this.db.prepare('SELECT * FROM spaces').all() as SpaceRow[];
     return rows.map(row => this.mapRowToSpace(row));
+  }
+
+  private assertNoActiveRun(spaceId: string, action: 'delete' | 'unpublish'): void {
+    const active = this.db.prepare("SELECT 1 FROM runs WHERE space_id = ? AND status = 'running'").get(spaceId);
+    if (active) {
+      throw new Error(`Cannot ${action} a Space while a run is active.`);
+    }
   }
 
   private setAllowedMcpServers(spaceId: string, serverIds: string[]) {

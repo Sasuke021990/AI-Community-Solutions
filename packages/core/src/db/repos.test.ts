@@ -166,6 +166,43 @@ describe('Database and Repositories Integration', () => {
     })).not.toThrow();
   });
 
+  it('hasActiveRun reflects whether a running run exists for the space', () => {
+    const spaceId = randomUUID();
+    spaceRepo.create({
+      id: spaceId, name: 'S', description: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    expect(runRepo.hasActiveRun(spaceId)).toBe(false);
+
+    const runId = randomUUID();
+    runRepo.create({ id: runId, spaceId, problem: 'P', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() });
+    expect(runRepo.hasActiveRun(spaceId)).toBe(true);
+
+    runRepo.updateStatus(runId, RunStatus.Completed, Date.now());
+    expect(runRepo.hasActiveRun(spaceId)).toBe(false);
+  });
+
+  it('delete and unpublish are blocked while a run is active on the space', () => {
+    const spaceId = randomUUID();
+    spaceRepo.create({
+      id: spaceId, name: 'S', description: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    agentRepo.create({ id: randomUUID(), spaceId, name: 'A', role: 'A', systemPrompt: 'A', position: 0, isOrchestrator: false });
+    spaceRepo.publish(spaceId);
+
+    const runId = randomUUID();
+    runRepo.create({ id: runId, spaceId, problem: 'P', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() });
+
+    expect(() => spaceRepo.delete(spaceId)).toThrowError(/Cannot delete a Space while a run is active/);
+    expect(() => spaceRepo.unpublish(spaceId)).toThrowError(/Cannot unpublish a Space while a run is active/);
+
+    // Once the run finishes, both are allowed again.
+    runRepo.updateStatus(runId, RunStatus.Completed, Date.now());
+    expect(() => spaceRepo.unpublish(spaceId)).not.toThrow();
+    expect(() => spaceRepo.delete(spaceId)).not.toThrow();
+  });
+
   it('listBySpace returns a space\'s runs newest-first, excluding other spaces', () => {
     const spaceId = randomUUID();
     spaceRepo.create({

@@ -7,8 +7,7 @@ export class RunRepo {
   constructor(private db: SQLiteDatabase) {}
 
   public create(run: Run): void {
-    const active = this.db.prepare('SELECT id FROM runs WHERE space_id = ? AND status = ?').get(run.spaceId, RunStatus.Running);
-    if (active) {
+    if (this.hasActiveRun(run.spaceId)) {
       throw new Error('A run is already active for this Space.');
     }
 
@@ -47,6 +46,13 @@ export class RunRepo {
     const row = this.db.prepare('SELECT * FROM runs WHERE id = ?').get(id) as RunRow | undefined;
     if (!row) return null;
     return this.mapRow(row);
+  }
+
+  public hasActiveRun(spaceId: string): boolean {
+    const active = this.db
+      .prepare('SELECT id FROM runs WHERE space_id = ? AND status = ?')
+      .get(spaceId, RunStatus.Running);
+    return !!active;
   }
 
   public listBySpace(spaceId: string): Run[] {
