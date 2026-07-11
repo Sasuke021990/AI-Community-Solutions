@@ -176,36 +176,41 @@ The plan is phased so the core engine is provable early (via tests and a scratch
 
 ---
 
-## Phase 6 — Desktop UI
+## Phase 6 — Desktop UI ✅ (implemented as this repo's "Phase 5"; manual end-to-end flow still outstanding)
 
 **Goal**: All five screens from DESIGN.md §4.8. Build in the order below — each step is independently usable.
 
 ### 6.1 Settings + MCP Registry
 
-- [ ] Settings form: LM Studio URL + "Test connection" (calls `models:list`, shows model count or the guidance error), concurrency cap, reports folder picker
-- [ ] MCP registry table: add/edit/remove (stdio: command, args, env editor; http: URL), enabled toggle, "Test connection" showing the server's tools or a structured error; delete-block dialog lists affected published Spaces
+- [x] Settings form: LM Studio URL + "Test connection" (calls `models:list`, shows model count or the guidance error), concurrency cap, reports folder picker
+- [x] MCP registry table: add/edit/remove (stdio: command, args, env editor; http: URL), enabled toggle, "Test connection" showing the server's tools or a structured error; delete-block dialog lists affected published Spaces
 
 ### 6.2 Spaces Home + Space Builder
 
-- [ ] Home: card grid, status badges, New Space, delete with confirm (cascades)
-- [ ] Builder: name/description; strategy picker with one-line explanations; default model dropdown (live from `models:list`, refresh button, stale-model warning); max rounds; MCP checklist from registry
-- [ ] Agent list: add/edit/reorder (drag or up/down); per agent: name, role title, **auto-generated system prompt from role template** (editable in an "Advanced" expander), optional model override dropdown, orchestrator toggle (visible only for orchestrator strategy; enforces exactly one)
-- [ ] UI hint when agent count exceeds 8 (soft recommendation, not a block)
-- [ ] Publish button → validation issues rendered inline; published Space renders read-only with "Unpublish to edit"
-- [ ] Ship 6–8 starter role templates (Researcher, Analyst, Writer, Coder, Reviewer, Critic, Planner, Domain Expert) as a static catalog: `core/src/templates/roles.json` bundled in `@acs/core` (each entry: `id`, `name`, `description`, `systemPromptTemplate` with `{{agentName}}`/`{{spaceDescription}}` placeholders), exposed via `listRoleTemplates()`. **Copy-on-create**: picking a template copies the rendered prompt into the agent's `system_prompt` — no ongoing reference, so template improvements in future versions never mutate existing Spaces, and edits don't "detach" anything. Not stored in SQLite (no seeding/migration/sync). User-defined custom templates: deferred, not v1
+- [x] Home: card grid, status badges, New Space, delete with confirm (cascades)
+- [x] Builder: name/description; strategy picker with one-line explanations; default model dropdown (live from `models:list`, refresh button, stale-model warning); max rounds; MCP checklist from registry
+- [x] Agent list: add/edit/reorder (up/down); per agent: name, role title, **auto-generated system prompt from role template** (editable in an "Advanced" expander), optional model override dropdown, orchestrator toggle (visible only for orchestrator strategy; correctness enforced server-side by publish validation, UI shows a hint rather than a hard client-side block)
+- [x] UI hint when agent count exceeds 8 (soft recommendation, not a block)
+- [x] Publish button → validation issues rendered inline; published Space renders read-only with "Unpublish to edit"
+- [x] Ship 8 starter role templates (Researcher, Analyst, Writer, Coder, Reviewer, Critic, Planner, Domain Expert) as a static catalog: `core/src/templates/roles.json` bundled in `@acs/core`, exposed via `listRoleTemplates()` + `renderRoleTemplate()`. Rendering happens via a `templates:render` IPC channel (kept server-side so there is one source of truth, not duplicated in the renderer). Copy-on-create confirmed by test. Not stored in SQLite
 
 ### 6.3 Run View + History
 
-- [ ] Problem input (blocked when empty or Space busy) + Start
-- [ ] Live feed: events grouped by round headers; agent messages with agent name/color; streaming tokens for the active agent; tool calls collapsed-expandable (args + result); system notices; auto-scroll with pause-on-user-scroll
-- [ ] Stop button with confirm
-- [ ] Completion panel: final answer rendered as markdown; **Open PDF** and **Show in folder** buttons; failed runs show the error prominently (e.g. missing-model guidance)
-- [ ] History tab per Space: run list (status, date, rounds); opening a run replays its transcript from `run_events` using the same feed component
+- [x] Problem input (blocked when empty via disabled button, and hidden while the Space has an active run) + Start
+- [x] Live feed: agent messages with per-turn headers (see deviation below), tool calls collapsed-expandable (args + result), system notices
+- [ ] **Deviation**: events render chronologically by `seq` with each `round_start` event as a turn header, not grouped into strict "rounds" — the design's per-round grouping doesn't map cleanly onto orchestrator/debate's concurrent dispatch, where `Promise.all`-fired worker/proposer turns interleave by completion order rather than belonging to one clean round boundary
+- [ ] Streaming tokens for the active agent — **not implemented**. The engine only emits a whole `agent_message` event per completed LLM call (established in Phase 3); wiring token-level streaming into the UI needs a new engine-level event type, out of scope for this pass
+- [ ] Auto-scroll with pause-on-user-scroll — not implemented
+- [x] Stop button — **no confirmation dialog** (direct stop); the plan called for "Stop button with confirm"
+- [x] Completion panel: final answer rendered as markdown (dependency-free renderer, HTML-escaped before any tag insertion since the source is untrusted model output)
+- [ ] **Open PDF** / **Show in folder** buttons — not implemented; PDF generation is Phase 7 and doesn't exist yet, so the panel shows "PDF report generation is not available yet" instead of a non-functional button
+- [x] Failed runs show the error prominently
+- [x] History tab per Space: run list (status, date, rounds); opening a run replays its transcript from `run_events` using the same `RunFeed` component the live view uses
 
 ### Acceptance criteria
 
-- Full manual flow with real LM Studio + one real MCP server: register MCP → create Space (2–3 agents, round-robin) → publish → submit problem → watch live collaboration → stop/restart → completed run shows final answer; history replays correctly
-- Non-technical path check: a Space is creatable without ever opening an Advanced expander
+- [ ] **Not yet verified**: full manual flow with real LM Studio + one real MCP server (register MCP → create Space → publish → submit problem → watch live collaboration → stop/restart → completed run shows final answer → history replays correctly). No native UI automation tool was available to click-test this; verification so far rests on strict `tsc --noEmit` across every screen, the full automated suite, and confirming the compiled app boots cleanly with zero renderer console errors (renderer console is now forwarded to the main process log specifically to make this checkable)
+- [x] Non-technical path check: a Space is creatable without ever opening an Advanced expander (name + role-template pick is sufficient)
 
 ---
 
