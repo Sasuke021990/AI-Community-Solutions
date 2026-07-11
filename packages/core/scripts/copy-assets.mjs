@@ -35,5 +35,19 @@ function copyRoleTemplates() {
   console.log('[copy-assets] copied roles.json into dist/templates');
 }
 
+function copyPresets() {
+  const src = join(here, '..', 'src', 'presets', 'presets.json');
+  const destDir = join(here, '..', 'dist', 'presets');
+  const dest = join(destDir, 'presets.json');
+  if (!existsSync(src)) {
+    console.error(`[copy-assets] presets source not found: ${src}`);
+    process.exit(1);
+  }
+  mkdirSync(destDir, { recursive: true });
+  copyFileSync(src, dest);
+  console.log('[copy-assets] copied presets.json into dist/presets');
+}
+
 copyMigrations();
 copyRoleTemplates();
+copyPresets();

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { Repositories, LmStudioClient, McpClientWrapper, Space, SpaceStatus, listRoleTemplates } from '@acs/core';
+import { Repositories, LmStudioClient, McpClientWrapper, Space, SpaceStatus, listRoleTemplates, listSpacePresets, SpacePreset } from '@acs/core';
 import { Channels, IpcResult } from '../shared/ipc.js';
 import { RunManager } from './RunManager.js';
 import { SettingsStore } from './SettingsStore.js';
@@ -11,6 +11,8 @@ import { SettingsStore } from './SettingsStore.js';
  * it's attached only at the IPC response boundary.
  */
 export type SpaceWithActivity = Space & { hasActiveRun: boolean };
+
+export type PresetWithStatus = SpacePreset & { existingSpaceId: string | null };
 
 export interface IpcRouterDeps {
   repos: Repositories;
@@ -170,7 +172,49 @@ export function createIpcRouter(deps: IpcRouterDeps) {
       return settingsStore.update(patch);
     },
 
-    [Channels.templatesList.name]: async () => listRoleTemplates()
+    [Channels.templatesList.name]: async () => listRoleTemplates(),
+
+    [Channels.presetsList.name]: async () => {
+      const presets = listSpacePresets();
+      const spaces = repos.spaces.list();
+      return presets.map((p): PresetWithStatus => ({
+        ...p,
+        existingSpaceId: spaces.find((s) => s.presetId === p.id)?.id ?? null
+      }));
+    },
+
+    [Channels.spacesCreateFromPreset.name]: async (p) => {
+      const { presetId } = Channels.spacesCreateFromPreset.requestSchema.parse(p);
+      const preset = listSpacePresets().find((pr) => pr.id === presetId);
+      if (!preset) throw new Error(`Unknown preset "${presetId}"`);
+
+      const now = Date.now();
+      const spaceId = randomUUID();
+      const space = {
+        id: spaceId,
+        name: preset.name,
+        description: preset.description,
+        strategy: preset.strategy,
+        defaultModel: '',
+        maxRounds: preset.maxRounds,
+        status: SpaceStatus.Draft as SpaceStatus,
+        presetId: preset.id,
+        createdAt: now,
+        updatedAt: now
+      };
+      const agents = preset.agents.map((a, i) => ({
+        id: randomUUID(),
+        spaceId,
+        name: a.name,
+        role: a.role,
+        systemPrompt: a.systemPrompt,
+        isOrchestrator: a.isOrchestrator,
+        position: i
+      }));
+
+      const created = repos.spaces.createFromPreset(space, agents);
+      return withActivity(created);
+    }
   };
 
   return {

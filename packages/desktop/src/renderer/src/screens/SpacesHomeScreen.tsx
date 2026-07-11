@@ -4,11 +4,12 @@ import { call } from '../lib/api.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 
 interface SpacesHomeScreenProps {
+  onOpenPresets: () => void;
   onOpenBuilder: (spaceId: string | null) => void;
   onOpenRun: (spaceId: string) => void;
 }
 
-export function SpacesHomeScreen({ onOpenBuilder, onOpenRun }: SpacesHomeScreenProps) {
+export function SpacesHomeScreen({ onOpenPresets, onOpenBuilder, onOpenRun }: SpacesHomeScreenProps) {
   const [spaces, setSpaces] = useState<SpaceWithActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,9 +50,14 @@ export function SpacesHomeScreen({ onOpenBuilder, onOpenRun }: SpacesHomeScreenP
           <h1>Spaces</h1>
           <p className="subtitle">Teams of agents that collaborate on a problem until they produce a solution.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => onOpenBuilder(null)}>
-          New Space
-        </button>
+        <div className="row">
+          <button className="btn" onClick={onOpenPresets}>
+            Explore Presets
+          </button>
+          <button className="btn btn-primary" onClick={() => onOpenBuilder(null)}>
+            New Space
+          </button>
+        </div>
       </div>
 
       {error && <div className="banner banner-error">{error}</div>}

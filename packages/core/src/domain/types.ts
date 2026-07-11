@@ -20,6 +20,7 @@ export interface Space {
   defaultModel: string;
   maxRounds: number;
   status: SpaceStatus;
+  presetId?: string | null;
   createdAt: number;
   updatedAt: number;
   agents?: Agent[];

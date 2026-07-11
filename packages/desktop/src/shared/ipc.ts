@@ -114,6 +114,10 @@ export const SettingsPatchSchema = z.object({
   interTokenTimeoutSec: z.number().int().min(10).max(900).optional()
 });
 
+// ---- Presets ----------------------------------------------------------------------------
+
+export const SpaceCreateFromPresetSchema = z.object({ presetId: z.string().min(1) });
+
 // ---- Channel registry -------------------------------------------------------------------
 
 export const Channels = {
@@ -147,7 +151,10 @@ export const Channels = {
   settingsGet: defineChannel('settings:get', EmptySchema),
   settingsSet: defineChannel('settings:set', SettingsPatchSchema),
 
-  templatesList: defineChannel('templates:list', EmptySchema)
+  templatesList: defineChannel('templates:list', EmptySchema),
+
+  presetsList: defineChannel('presets:list', EmptySchema),
+  spacesCreateFromPreset: defineChannel('spaces:createFromPreset', SpaceCreateFromPresetSchema)
 } as const;
 
 export type ChannelName = (typeof Channels)[keyof typeof Channels]['name'];

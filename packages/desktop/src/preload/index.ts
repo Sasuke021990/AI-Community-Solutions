@@ -10,9 +10,9 @@ import type {
   RoleTemplate
 } from '@acs/core';
 import type { Settings, SettingsPatch } from '../main/SettingsStore.js';
-import type { SpaceWithActivity } from '../main/ipcRouter.js';
+import type { SpaceWithActivity, PresetWithStatus } from '../main/ipcRouter.js';
 
-export type { SpaceWithActivity } from '../main/ipcRouter.js';
+export type { SpaceWithActivity, PresetWithStatus } from '../main/ipcRouter.js';
 
 function invoke<T>(channelName: string, payload: unknown = {}): Promise<IpcResult<T>> {
   return ipcRenderer.invoke(channelName, payload);
@@ -109,6 +109,10 @@ const api = {
   settings: {
     get: () => invoke<Settings>(Channels.settingsGet.name),
     set: (patch: SettingsPatch) => invoke<Settings>(Channels.settingsSet.name, patch)
+  },
+  presets: {
+    list: () => invoke<PresetWithStatus[]>(Channels.presetsList.name),
+    createFromPreset: (presetId: string) => invoke<SpaceWithActivity>(Channels.spacesCreateFromPreset.name, { presetId })
   },
   templates: {
     list: () => invoke<RoleTemplate[]>(Channels.templatesList.name)

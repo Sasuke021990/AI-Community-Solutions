@@ -9,6 +9,7 @@ interface AgentEditorProps {
   models: string[];
   nextPosition: number;
   existingAgent: Agent | null;
+  locked?: boolean;
   onSaved: () => void;
   onCancel: () => void;
 }
@@ -20,6 +21,7 @@ export function AgentEditor({
   models,
   nextPosition,
   existingAgent,
+  locked = false,
   onSaved,
   onCancel
 }: AgentEditorProps) {
@@ -89,6 +91,7 @@ export function AgentEditor({
           ref={nameInputRef}
           type="text"
           value={name}
+          disabled={locked}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Researcher"
         />
@@ -96,7 +99,7 @@ export function AgentEditor({
 
       <div className="field">
         <label>Role template</label>
-        <select value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+        <select value={templateId} disabled={locked} onChange={(e) => applyTemplate(e.target.value)}>
           <option value="custom">Custom (write your own)</option>
           {roleTemplates.map((t) => (
             <option key={t.id} value={t.id}>
@@ -108,13 +111,13 @@ export function AgentEditor({
 
       <div className="field">
         <label>Role title</label>
-        <input type="text" value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Researcher" />
+        <input type="text" value={role} disabled={locked} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Researcher" />
       </div>
 
       {strategy === 'orchestrator' && (
         <div className="field">
           <label>
-            <input type="checkbox" checked={isOrchestrator} onChange={(e) => setIsOrchestrator(e.target.checked)} /> This
+            <input type="checkbox" disabled={locked} checked={isOrchestrator} onChange={(e) => setIsOrchestrator(e.target.checked)} /> This
             agent is the orchestrator
           </label>
           <div className="field-hint">Exactly one agent must be the orchestrator for this strategy.</div>

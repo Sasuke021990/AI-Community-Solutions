@@ -1,6 +1,7 @@
 export type View =
   | { name: 'spaces' }
   | { name: 'builder'; spaceId: string | null }
+  | { name: 'presets' }
   | { name: 'run'; spaceId: string }
   | { name: 'history'; spaceId: string }
   | { name: 'mcp' }

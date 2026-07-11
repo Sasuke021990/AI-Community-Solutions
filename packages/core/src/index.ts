@@ -24,3 +24,6 @@ export * from './engine/strategies/index.js';
 
 // Role templates
 export * from './templates/roleTemplates.js';
+
+// Space presets
+export * from './presets/spacePresets.js';

@@ -6,7 +6,9 @@ export class AgentRepo {
   constructor(private db: SQLiteDatabase) {}
 
   public create(agent: Agent): void {
-    this.assertSpaceDraft(agent.spaceId);
+    const lock = this.getSpaceLock(agent.spaceId);
+    if (lock.published) throw new Error('Cannot modify agents when Space is published.');
+    if (lock.presetId) throw new Error("This Space's agent lineup is fixed by its preset and cannot be changed.");
     this.db.prepare(`
       INSERT INTO agents (id, space_id, name, role, system_prompt, model_id, is_orchestrator, position)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -17,7 +19,23 @@ export class AgentRepo {
   }
 
   public update(agent: Agent): void {
-    this.assertSpaceDraft(agent.spaceId);
+    const lock = this.getSpaceLock(agent.spaceId);
+    if (lock.published) throw new Error('Cannot modify agents when Space is published.');
+    if (lock.presetId) {
+      const current = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(agent.id) as AgentRow | undefined;
+      if (!current) throw new Error('Agent not found');
+      if (
+        agent.name !== current.name ||
+        agent.role !== current.role ||
+        agent.isOrchestrator !== (current.is_orchestrator === 1) ||
+        agent.position !== current.position
+      ) {
+        throw new Error(
+          "This agent's name, role, position, and orchestrator status are fixed by the Space's preset " +
+          "- only its model and system prompt can be changed."
+        );
+      }
+    }
     this.db.prepare(`
       UPDATE agents
       SET name = ?, role = ?, system_prompt = ?, model_id = ?, is_orchestrator = ?, position = ?
@@ -29,7 +47,9 @@ export class AgentRepo {
   }
 
   public delete(id: string, spaceId: string): void {
-    this.assertSpaceDraft(spaceId);
+    const lock = this.getSpaceLock(spaceId);
+    if (lock.published) throw new Error('Cannot modify agents when Space is published.');
+    if (lock.presetId) throw new Error("This Space's agent lineup is fixed by its preset and cannot be changed.");
     this.db.prepare('DELETE FROM agents WHERE id = ?').run(id);
   }
 
@@ -38,11 +58,11 @@ export class AgentRepo {
     return rows.map(this.mapRowToAgent);
   }
 
-  private assertSpaceDraft(spaceId: string): void {
-    const space = this.db.prepare('SELECT status FROM spaces WHERE id = ?').get(spaceId) as { status: string } | undefined;
-    if (space && space.status === 'published') {
-      throw new Error('Cannot modify agents when Space is published.');
-    }
+  private getSpaceLock(spaceId: string): { published: boolean; presetId: string | null } {
+    const space = this.db
+      .prepare('SELECT status, preset_id FROM spaces WHERE id = ?')
+      .get(spaceId) as { status: string; preset_id: string | null } | undefined;
+    return { published: space?.status === 'published', presetId: space?.preset_id ?? null };
   }
 
   private mapRowToAgent(row: AgentRow): Agent {

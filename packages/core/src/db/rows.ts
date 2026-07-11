@@ -21,6 +21,7 @@ export interface SpaceRow {
   default_model: string;
   max_rounds: number;
   status: string;
+  preset_id: string | null;
   created_at: number;
   updated_at: number;
 }

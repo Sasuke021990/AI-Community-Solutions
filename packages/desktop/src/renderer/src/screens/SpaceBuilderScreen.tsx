@@ -222,6 +222,10 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
   if (loading) return <div className="empty-state">Loading...</div>;
 
   const isPublished = space?.status === 'published';
+  const isPreset = !!(space as any)?.presetId;
+  const isLocked = isPublished || isPreset;
+  const isEditingLocked = isPublished || isPreset; // To keep it clear which operations are blocked by presets
+
   const sortedAgents = [...agents].sort((a, b) => a.position - b.position);
   const strategyLabel = STRATEGIES.find((s) => s.value === form.strategy)?.label;
 
@@ -270,6 +274,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <div>
               <strong>{space.name}</strong>
+              {isPreset && <span className="badge badge-info" style={{ marginLeft: 8 }}>Preset</span>}
               <div className="field-hint">
                 {strategyLabel} · {form.defaultModel || 'no default model set'} · max {form.maxRounds} round(s)
               </div>
@@ -281,12 +286,17 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
         </div>
       ) : (
         <div className="card" style={{ maxWidth: 560, marginBottom: 20 }}>
+          {isPreset && (
+            <div className="banner banner-info" style={{ marginBottom: 16 }}>
+              This Space was created from a preset. Name, description, strategy, and agent roster are locked.
+            </div>
+          )}
           <div className="field">
             <label>Name</label>
             <input
               type="text"
               value={form.name}
-              disabled={isPublished}
+              disabled={isEditingLocked}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </div>
@@ -294,7 +304,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
             <label>Description</label>
             <textarea
               value={form.description}
-              disabled={isPublished}
+              disabled={isEditingLocked}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               rows={2}
             />
@@ -303,7 +313,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
             <label>Coordination strategy</label>
             <select
               value={form.strategy}
-              disabled={isPublished}
+              disabled={isEditingLocked}
               onChange={(e) => setForm({ ...form, strategy: e.target.value as Space['strategy'] })}
             >
               {STRATEGIES.map((s) => (
@@ -399,6 +409,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
                 models={models}
                 nextPosition={sortedAgents.length}
                 existingAgent={agent}
+                locked={isPreset}
                 onSaved={() => {
                   setEditingAgent(null);
                   loadAll(space.id);
@@ -417,18 +428,24 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
                 </div>
                 {!isPublished && (
                   <div className="row">
-                    <button className="btn-link" onClick={() => moveAgent(agent, -1)} disabled={i === 0}>
-                      ↑
-                    </button>
-                    <button className="btn-link" onClick={() => moveAgent(agent, 1)} disabled={i === sortedAgents.length - 1}>
-                      ↓
-                    </button>
+                    {!isPreset && (
+                      <>
+                        <button className="btn-link" onClick={() => moveAgent(agent, -1)} disabled={i === 0}>
+                          ↑
+                        </button>
+                        <button className="btn-link" onClick={() => moveAgent(agent, 1)} disabled={i === sortedAgents.length - 1}>
+                          ↓
+                        </button>
+                      </>
+                    )}
                     <button className="btn-link" onClick={() => setEditingAgent(agent)}>
                       Edit
                     </button>
-                    <button className="btn-link" onClick={() => deleteAgent(agent)}>
-                      Delete
-                    </button>
+                    {!isPreset && (
+                      <button className="btn-link" onClick={() => deleteAgent(agent)}>
+                        Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -453,9 +470,11 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
 
           {!isPublished && editingAgent === null && (
             <div className="row">
-              <button className="btn" onClick={() => setEditingAgent('new')}>
-                Add agent
-              </button>
+              {!isPreset && (
+                <button className="btn" onClick={() => setEditingAgent('new')}>
+                  Add agent
+                </button>
+              )}
               <button className="btn btn-primary" onClick={() => setConfirmPublish(true)}>
                 Publish
               </button>

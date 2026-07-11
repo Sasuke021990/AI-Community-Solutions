@@ -15,11 +15,11 @@ export class SpaceRepo {
   public create(space: Space): void {
     this.db.transaction(() => {
       this.db.prepare(`
-        INSERT INTO spaces (id, name, description, strategy, default_model, max_rounds, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO spaces (id, name, description, strategy, default_model, max_rounds, status, preset_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         space.id, space.name, space.description, space.strategy, space.defaultModel,
-        space.maxRounds, space.status, space.createdAt, space.updatedAt
+        space.maxRounds, space.status, space.presetId ?? null, space.createdAt, space.updatedAt
       );
 
       if (space.allowedMcpServerIds) {
@@ -29,9 +29,19 @@ export class SpaceRepo {
   }
 
   public update(space: Space): void {
-    const current = this.db.prepare('SELECT status FROM spaces WHERE id = ?').get(space.id) as { status: string } | undefined;
-    if (current && current.status === SpaceStatus.Published) {
+    const current = this.db.prepare('SELECT * FROM spaces WHERE id = ?').get(space.id) as SpaceRow | undefined;
+    if (!current) throw new Error('Space not found');
+    if (current.status === SpaceStatus.Published) {
       throw new Error('Cannot edit a published space. Unpublish it first.');
+    }
+    if (current.preset_id) {
+      if (
+        space.name !== current.name ||
+        space.description !== current.description ||
+        space.strategy !== current.strategy
+      ) {
+        throw new Error("This Space's name, description, and strategy are fixed by its preset and cannot be changed.");
+      }
     }
 
     this.db.transaction(() => {
@@ -46,6 +56,31 @@ export class SpaceRepo {
       if (space.allowedMcpServerIds) {
         this.setAllowedMcpServers(space.id, space.allowedMcpServerIds);
       }
+    })();
+  }
+
+  public createFromPreset(space: Space, agents: import('../../domain/types.js').Agent[]): Space {
+    if (!space.presetId) throw new Error('createFromPreset requires a presetId');
+
+    const existing = this.db.prepare('SELECT id FROM spaces WHERE preset_id = ?').get(space.presetId);
+    if (existing) throw new Error(`A Space for this preset already exists.`);
+
+    return this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO spaces (id, name, description, strategy, default_model, max_rounds, status, preset_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+      `).run(
+        space.id, space.name, space.description, space.strategy, space.defaultModel,
+        space.maxRounds, space.status, space.createdAt, space.updatedAt
+      );
+
+      for (const agent of agents) {
+        this.agentRepo.create(agent);
+      }
+
+      this.db.prepare('UPDATE spaces SET preset_id = ? WHERE id = ?').run(space.presetId, space.id);
+
+      return this.get(space.id)!;
     })();
   }
 
@@ -114,6 +149,7 @@ export class SpaceRepo {
       defaultModel: row.default_model,
       maxRounds: row.max_rounds,
       status: row.status as SpaceStatus,
+      presetId: row.preset_id,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       allowedMcpServerIds: this.getAllowedMcpServers(row.id)

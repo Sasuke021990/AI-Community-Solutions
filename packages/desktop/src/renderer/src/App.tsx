@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { type View, topLevelFor } from './view.js';
 import { SpacesHomeScreen } from './screens/SpacesHomeScreen.js';
 import { SpaceBuilderScreen } from './screens/SpaceBuilderScreen.js';
+import { PresetGalleryScreen } from './screens/PresetGalleryScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { RunHistoryScreen } from './screens/RunHistoryScreen.js';
 import { McpRegistryScreen } from './screens/McpRegistryScreen.js';
@@ -22,6 +23,7 @@ function App() {
     case 'spaces':
       content = (
         <SpacesHomeScreen
+          onOpenPresets={() => setView({ name: 'presets' })}
           onOpenBuilder={(spaceId) => setView({ name: 'builder', spaceId })}
           onOpenRun={(spaceId) => setView({ name: 'run', spaceId })}
         />
@@ -34,6 +36,14 @@ function App() {
           onCreated={(id) => setView({ name: 'builder', spaceId: id })}
           onOpenRun={(spaceId) => setView({ name: 'run', spaceId })}
           onPublished={() => setView({ name: 'spaces' })}
+          onBack={() => setView({ name: 'spaces' })}
+        />
+      );
+      break;
+    case 'presets':
+      content = (
+        <PresetGalleryScreen
+          onOpenBuilder={(spaceId) => setView({ name: 'builder', spaceId })}
           onBack={() => setView({ name: 'spaces' })}
         />
       );

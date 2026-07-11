@@ -258,4 +258,86 @@ describe('Database and Repositories Integration', () => {
     const other = runEventRepo.append({ id: randomUUID(), runId: runId2, type: RunEventType.System, payload: {}, at: Date.now() });
     expect(other.seq).toBe(1);
   });
+
+  it('createFromPreset builds Space and agents atomically and prevents duplicates', () => {
+    const spaceId = randomUUID();
+    const presetId = 'my-preset';
+    
+    const space = {
+      id: spaceId, name: 'S', description: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, presetId, createdAt: Date.now(), updatedAt: Date.now()
+    };
+    const agents = [
+      { id: randomUUID(), spaceId, name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 0 },
+      { id: randomUUID(), spaceId, name: 'B', role: 'B', systemPrompt: 'B', isOrchestrator: false, position: 1 }
+    ];
+
+    const created = spaceRepo.createFromPreset(space, agents);
+    expect(created.presetId).toBe(presetId);
+    
+    const savedAgents = agentRepo.listBySpace(spaceId);
+    expect(savedAgents.length).toBe(2);
+    expect(savedAgents[0].name).toBe('A');
+    expect(savedAgents[1].name).toBe('B');
+
+    // Duplicate presetId fails and makes no partial writes
+    const space2 = { ...space, id: randomUUID() };
+    const agents2 = [{ id: randomUUID(), spaceId: space2.id, name: 'C', role: 'C', systemPrompt: 'C', isOrchestrator: false, position: 0 }];
+    
+    expect(() => spaceRepo.createFromPreset(space2, agents2)).toThrowError(/already exists/);
+    expect(spaceRepo.get(space2.id)).toBeNull();
+    expect(agentRepo.listBySpace(space2.id).length).toBe(0);
+  });
+
+  it('preset Space enforces structure locks on agents and space fields', () => {
+    const spaceId = randomUUID();
+    const presetId = 'locked-preset';
+    
+    const space = {
+      id: spaceId, name: 'OrigName', description: 'OrigDesc', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, presetId, createdAt: Date.now(), updatedAt: Date.now()
+    };
+    const agentId = randomUUID();
+    const agents = [
+      { id: agentId, spaceId, name: 'OrigAgentName', role: 'Role', systemPrompt: 'Sys', isOrchestrator: false, position: 0 }
+    ];
+
+    spaceRepo.createFromPreset(space, agents);
+
+    // Agent create/delete throws
+    expect(() => agentRepo.create({ id: randomUUID(), spaceId, name: 'New', role: 'New', systemPrompt: 'New', isOrchestrator: false, position: 1 }))
+      .toThrowError(/agent lineup is fixed/);
+    expect(() => agentRepo.delete(agentId, spaceId)).toThrowError(/agent lineup is fixed/);
+
+    // Agent update: model/prompt succeeds
+    agentRepo.update({ id: agentId, spaceId, name: 'OrigAgentName', role: 'Role', systemPrompt: 'NewSys', modelId: 'new-model', isOrchestrator: false, position: 0 });
+    let updatedAgent = agentRepo.listBySpace(spaceId)[0];
+    expect(updatedAgent.systemPrompt).toBe('NewSys');
+    expect(updatedAgent.modelId).toBe('new-model');
+
+    // Agent update: structural change throws and blocks prompt change
+    expect(() => agentRepo.update({ id: agentId, spaceId, name: 'ChangedName', role: 'Role', systemPrompt: 'EvenNewerSys', modelId: 'new-model', isOrchestrator: false, position: 0 }))
+      .toThrowError(/are fixed by the Space's preset/);
+    updatedAgent = agentRepo.listBySpace(spaceId)[0];
+    expect(updatedAgent.name).toBe('OrigAgentName'); // Name unchanged
+    expect(updatedAgent.systemPrompt).toBe('NewSys'); // Prompt unchanged (no partial success)
+
+    // Space update: model/rounds succeeds
+    spaceRepo.update({ id: spaceId, name: 'OrigName', description: 'OrigDesc', strategy: Strategy.RoundRobin, defaultModel: 'm2', maxRounds: 10, status: SpaceStatus.Draft, presetId, createdAt: Date.now(), updatedAt: Date.now() });
+    let updatedSpace = spaceRepo.get(spaceId)!;
+    expect(updatedSpace.defaultModel).toBe('m2');
+    expect(updatedSpace.maxRounds).toBe(10);
+
+    // Space update: name/desc/strategy throws
+    expect(() => spaceRepo.update({ id: spaceId, name: 'NewName', description: 'OrigDesc', strategy: Strategy.RoundRobin, defaultModel: 'm2', maxRounds: 10, status: SpaceStatus.Draft, presetId, createdAt: Date.now(), updatedAt: Date.now() }))
+      .toThrowError(/are fixed by its preset/);
+
+    // Space publish/unpublish/delete still works
+    spaceRepo.publish(spaceId);
+    expect(spaceRepo.get(spaceId)!.status).toBe(SpaceStatus.Published);
+    spaceRepo.unpublish(spaceId);
+    expect(spaceRepo.get(spaceId)!.status).toBe(SpaceStatus.Draft);
+    spaceRepo.delete(spaceId);
+    expect(spaceRepo.get(spaceId)).toBeNull();
+  });
 });

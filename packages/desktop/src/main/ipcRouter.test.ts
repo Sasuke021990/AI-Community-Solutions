@@ -186,4 +186,37 @@ describe('ipcRouter', () => {
     expect(listRes.ok).toBe(true);
     if (listRes.ok) expect((listRes.data as { name: string }[]).map((a) => a.name)).toEqual(['A']);
   });
+
+  it('lists presets and properly annotates existingSpaceId', async () => {
+    // 1. Get initial presets
+    const listRes1 = await router.handle(Channels.presetsList.name, {});
+    expect(listRes1.ok).toBe(true);
+    if (!listRes1.ok) throw new Error('Expected ok');
+    
+    const presets = listRes1.data as { id: string; existingSpaceId: string | null }[];
+    expect(presets.length).toBeGreaterThan(0);
+    expect(presets[0].existingSpaceId).toBeNull();
+    
+    // 2. Create a space from the first preset
+    const presetId = presets[0].id;
+    const createRes = await router.handle(Channels.spacesCreateFromPreset.name, { presetId });
+    expect(createRes.ok).toBe(true);
+    if (!createRes.ok) throw new Error('Expected ok');
+    
+    const createdSpace = createRes.data as { id: string };
+    
+    // 3. List presets again and verify existingSpaceId is populated
+    const listRes2 = await router.handle(Channels.presetsList.name, {});
+    if (listRes2.ok) {
+      const presets2 = listRes2.data as { id: string; existingSpaceId: string | null }[];
+      const targetPreset = presets2.find(p => p.id === presetId);
+      expect(targetPreset?.existingSpaceId).toBe(createdSpace.id);
+    }
+  });
+
+  it('createFromPreset throws on unknown preset', async () => {
+    const createRes = await router.handle(Channels.spacesCreateFromPreset.name, { presetId: 'does-not-exist' });
+    expect(createRes.ok).toBe(false);
+    if (!createRes.ok) expect(createRes.error.message).toMatch(/Unknown preset/i);
+  });
 });
