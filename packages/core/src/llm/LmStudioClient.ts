@@ -6,7 +6,7 @@ export interface StallConfig {
   overallTimeoutMs?: number;
 }
 
-const DEFAULT_STALL_CONFIG: StallConfig = {
+const DEFAULT_STALL_CONFIG: Required<StallConfig> = {
   firstTokenTimeoutMs: 120_000,
   interTokenTimeoutMs: 60_000,
   overallTimeoutMs: 600_000
@@ -15,9 +15,9 @@ const DEFAULT_STALL_CONFIG: StallConfig = {
 export class LmStudioClient {
   constructor(private baseUrl: string = 'http://localhost:1234/v1') {}
 
-  public async listModels(): Promise<string[]> {
+  public async listModels(signal?: AbortSignal): Promise<string[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/models`);
+      const response = await fetch(`${this.baseUrl}/models`, { signal });
       if (!response.ok) {
         throw new Error(`HTTP Error ${response.status}: ${await response.text()}`);
       }
@@ -37,33 +37,36 @@ export class LmStudioClient {
     signal?: AbortSignal,
     stallConfig: StallConfig = DEFAULT_STALL_CONFIG
   ): Promise<ChatResponse> {
-    let response: Response;
     const timeouts = { ...DEFAULT_STALL_CONFIG, ...stallConfig };
 
+    const abortController = new AbortController();
+    const onSignalAbort = () => abortController.abort();
+    if (signal) {
+      if (signal.aborted) abortController.abort();
+      else signal.addEventListener('abort', onSignalAbort);
+    }
+
+    // Declared outside try so the finally block can always clear them.
+    let stallTimer: ReturnType<typeof setTimeout> | null = null;
+    let overallTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const resetStallTimer = (ms: number) => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        abortController.abort(
+          new Error(`Model stall timeout: no tokens received for ${ms}ms. Model may be overloaded.`)
+        );
+      }, ms);
+    };
+
     try {
-      const abortController = new AbortController();
-      const onSignalAbort = () => abortController.abort();
-      if (signal) signal.addEventListener('abort', onSignalAbort);
+      overallTimer = setTimeout(() => {
+        abortController.abort(new Error(`Model overall timeout exceeded (${timeouts.overallTimeoutMs}ms)`));
+      }, timeouts.overallTimeoutMs);
 
-      let stallTimer: NodeJS.Timeout | null = null;
-      let overallTimer: NodeJS.Timeout | null = null;
+      resetStallTimer(timeouts.firstTokenTimeoutMs);
 
-      const resetStallTimer = (ms: number) => {
-        if (stallTimer) clearTimeout(stallTimer);
-        stallTimer = setTimeout(() => {
-          abortController.abort(new Error('Model stall timeout: no tokens received for ' + ms + 'ms. Model may be overloaded.'));
-        }, ms);
-      };
-
-      if (timeouts.overallTimeoutMs) {
-        overallTimer = setTimeout(() => {
-          abortController.abort(new Error('Model overall timeout exceeded (' + timeouts.overallTimeoutMs + 'ms)'));
-        }, timeouts.overallTimeoutMs);
-      }
-
-      resetStallTimer(timeouts.firstTokenTimeoutMs!);
-
-      response = await fetch(`${this.baseUrl}/chat/completions`, {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...request, stream: true }),
@@ -71,90 +74,105 @@ export class LmStudioClient {
       });
 
       if (!response.ok) {
-        if (stallTimer) clearTimeout(stallTimer);
-        if (overallTimer) clearTimeout(overallTimer);
         throw new Error(`HTTP Error ${response.status}: ${await response.text()}`);
       }
-
       if (!response.body) {
         throw new Error('No response body returned from LM Studio');
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
-      
+
       let finalContent = '';
-      let currentToolCalls: ToolCall[] | undefined = undefined;
+      const currentToolCalls: ToolCall[] = [];
+      // Buffer holds any partial trailing line between reads, since chunk
+      // boundaries do not align with SSE line boundaries.
+      let buffer = '';
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      const processLine = (line: string) => {
+        const trimmed = line.trim();
+        if (trimmed === '' || !trimmed.startsWith('data:')) return;
+        const payload = trimmed.slice(5).trim();
+        if (payload === '[DONE]') return;
 
-        resetStallTimer(timeouts.interTokenTimeoutMs!);
-        const chunk = decoder.decode(value, { stream: true });
-        
-        const lines = chunk.split('\n').filter(l => l.trim() !== '');
-        for (const line of lines) {
-          if (line === 'data: [DONE]') continue;
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              const delta = data.choices[0]?.delta;
-              if (!delta) continue;
+        let data;
+        try {
+          data = JSON.parse(payload);
+        } catch {
+          // A genuinely malformed *complete* line; skip it.
+          return;
+        }
 
-              if (delta.content) {
-                finalContent += delta.content;
-                onToken(delta.content);
-              }
+        const delta = data.choices?.[0]?.delta;
+        if (!delta) return;
 
-              if (delta.tool_calls) {
-                if (!currentToolCalls) currentToolCalls = [];
-                for (const tcDelta of delta.tool_calls) {
-                  const idx = tcDelta.index;
-                  if (!currentToolCalls[idx]) {
-                    currentToolCalls[idx] = {
-                      id: tcDelta.id || '',
-                      type: 'function',
-                      function: { name: tcDelta.function?.name || '', arguments: tcDelta.function?.arguments || '' }
-                    };
-                  } else {
-                    if (tcDelta.function?.arguments) {
-                      currentToolCalls[idx].function.arguments += tcDelta.function.arguments;
-                    }
-                  }
+        if (delta.content) {
+          finalContent += delta.content;
+          onToken(delta.content);
+        }
+
+        if (delta.tool_calls) {
+          for (const tcDelta of delta.tool_calls) {
+            const idx = tcDelta.index ?? 0;
+            if (!currentToolCalls[idx]) {
+              currentToolCalls[idx] = {
+                id: tcDelta.id || '',
+                type: 'function',
+                function: {
+                  name: tcDelta.function?.name || '',
+                  arguments: tcDelta.function?.arguments || ''
                 }
-              }
-            } catch {
-              // Ignore parse errors on partial lines, wait for next chunk
+              };
+            } else {
+              if (tcDelta.id && !currentToolCalls[idx].id) currentToolCalls[idx].id = tcDelta.id;
+              if (tcDelta.function?.name) currentToolCalls[idx].function.name += tcDelta.function.name;
+              if (tcDelta.function?.arguments) currentToolCalls[idx].function.arguments += tcDelta.function.arguments;
             }
           }
         }
-      }
-
-      if (stallTimer) clearTimeout(stallTimer);
-      if (overallTimer) clearTimeout(overallTimer);
-      if (signal) signal.removeEventListener('abort', onSignalAbort);
-
-      const msg: ChatMessage = {
-        role: 'assistant',
-        content: finalContent,
       };
 
-      if (currentToolCalls && currentToolCalls.length > 0) {
-        msg.tool_calls = currentToolCalls;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        resetStallTimer(timeouts.interTokenTimeoutMs);
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        // Keep the last (possibly incomplete) line for the next chunk.
+        buffer = lines.pop() ?? '';
+        for (const line of lines) processLine(line);
       }
 
+      // Flush any decoder + buffer remainder as a final complete line.
+      buffer += decoder.decode();
+      if (buffer.trim() !== '') processLine(buffer);
+
+      const msg: ChatMessage = { role: 'assistant', content: finalContent };
+      if (currentToolCalls.length > 0) {
+        msg.tool_calls = currentToolCalls;
+      }
       return { message: msg };
     } catch (e: unknown) {
+      // If we aborted with a reason (stall / overall timeout, or user abort
+      // carrying an Error), surface that reason's message.
+      const reason = abortController.signal.reason;
+      if (reason instanceof Error && (reason.message.includes('stall') || reason.message.includes('timeout'))) {
+        throw reason;
+      }
       if (e instanceof Error) {
-        if (e.name === 'AbortError' || e.message?.includes('stall') || e.message?.includes('timeout')) {
-          throw new Error(e.message || 'Request aborted or timed out.');
+        if (e.name === 'AbortError') {
+          throw new Error('Request aborted.');
         }
         if (e.name === 'TypeError' || e.message.includes('fetch')) {
           throw new Error('Is LM Studio running? Failed to connect to ' + this.baseUrl);
         }
       }
       throw e;
+    } finally {
+      if (stallTimer) clearTimeout(stallTimer);
+      if (overallTimer) clearTimeout(overallTimer);
+      if (signal) signal.removeEventListener('abort', onSignalAbort);
     }
   }
 }

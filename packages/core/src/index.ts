@@ -10,3 +10,6 @@ export { Database } from './db/Database.js';
 export * from './db/repos/index.js';
 export { openDatabase, createRepositories } from './db/factory.js';
 export type { Repositories } from './db/factory.js';
+
+// LM Studio client
+export * from './llm/index.js';
