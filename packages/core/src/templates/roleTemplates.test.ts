@@ -2,15 +2,21 @@ import { describe, it, expect } from 'vitest';
 import { listRoleTemplates, renderRoleTemplate } from './roleTemplates.js';
 
 describe('listRoleTemplates', () => {
-  it('returns between 6 and 8 templates with unique ids', () => {
+  it('returns at least the starter set, all with unique ids and required fields', () => {
     const templates = listRoleTemplates();
     expect(templates.length).toBeGreaterThanOrEqual(6);
-    expect(templates.length).toBeLessThanOrEqual(8);
     expect(new Set(templates.map((t) => t.id)).size).toBe(templates.length);
     for (const t of templates) {
       expect(t.name).toBeTruthy();
       expect(t.description).toBeTruthy();
       expect(t.systemPromptTemplate).toContain('{{agentName}}');
+    }
+  });
+
+  it('includes the full Six Thinking Hats set', () => {
+    const ids = listRoleTemplates().map((t) => t.id);
+    for (const hat of ['white-hat', 'red-hat', 'black-hat', 'yellow-hat', 'green-hat', 'blue-hat']) {
+      expect(ids).toContain(hat);
     }
   });
 });
