@@ -229,6 +229,10 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
 
   const sortedAgents = [...agents].sort((a, b) => a.position - b.position);
   const strategyLabel = STRATEGIES.find((s) => s.value === form.strategy)?.label;
+  // For round-robin, one "round" is a full cycle through every agent, so the
+  // cap reads more naturally as cycles.
+  const isRoundRobin = form.strategy === 'round-robin';
+  const roundsLabel = isRoundRobin ? 'Max cycles' : 'Max rounds';
 
   return (
     <div>
@@ -277,7 +281,8 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
               <strong>{space.name}</strong>
               {isPreset && <span className="badge badge-info" style={{ marginLeft: 8 }}>Preset</span>}
               <div className="field-hint">
-                {strategyLabel} · {form.defaultModel || 'no default model set'} · max {form.maxRounds} round(s)
+                {strategyLabel} · {form.defaultModel || 'no default model set'} · max {form.maxRounds}{' '}
+                {isRoundRobin ? 'cycle(s)' : 'round(s)'}
               </div>
             </div>
             <button className="btn-link" onClick={() => setDetailsExpanded(true)}>
@@ -349,7 +354,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
             )}
           </div>
           <div className="field">
-            <label>Max rounds</label>
+            <label>{roundsLabel}</label>
             <input
               type="number"
               min={1}
@@ -358,6 +363,12 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
               disabled={isPublished}
               onChange={(e) => setForm({ ...form, maxRounds: Number(e.target.value) })}
             />
+            {isRoundRobin && (
+              <div className="field-hint">
+                One cycle = every agent speaks once, in order. The run ends when an agent declares a final answer
+                (only honored after a full cycle) or this many cycles have run.
+              </div>
+            )}
           </div>
           <div className="field">
             <label>Allowed MCP servers</label>

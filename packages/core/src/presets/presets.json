@@ -49,7 +49,7 @@
     "name": "OODA Loop",
     "description": "Observe, Orient, Decide, Act. A rapid tactical decision-making cycle.",
     "strategy": "round-robin",
-    "maxRounds": 8,
+    "maxRounds": 3,
     "agents": [
       {
         "name": "Observer",
@@ -121,7 +121,7 @@
     "name": "Design Thinking",
     "description": "Human-centric problem solving: empathize, define, ideate, prototype, test.",
     "strategy": "round-robin",
-    "maxRounds": 10,
+    "maxRounds": 2,
     "agents": [
       {
         "name": "Empathizer",
@@ -226,7 +226,7 @@
     "name": "The Core Framework",
     "description": "Define, deconstruct, analyze constraints, test hypothesis, evaluate.",
     "strategy": "round-robin",
-    "maxRounds": 8,
+    "maxRounds": 2,
     "agents": [
       {
         "name": "Problem Definer",

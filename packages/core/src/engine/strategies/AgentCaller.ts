@@ -5,9 +5,12 @@ import { ExecutionState } from './AgentStrategy.js';
 
 const COLLAB_INSTRUCTIONS =
   'You are collaborating with other agents to solve a problem. Think step by step. ' +
-  'When you are confident you have the complete final solution, output it wrapped in ' +
-  '<final_answer>...</final_answer> tags, with the answer as plain text/markdown ' +
-  '(no JSON, no escaping needed).';
+  'If your role is one stage of a larger process, do your part thoroughly and hand off ' +
+  'to the next agent - do NOT declare a final answer for the whole problem. ' +
+  'Only when the ENTIRE problem is fully solved and no further work from other agents is ' +
+  'needed, output the complete solution wrapped in <final_answer>...</final_answer> tags, ' +
+  'as plain text/markdown (no JSON, no escaping needed). Do not wrap a partial contribution ' +
+  'or a handoff to another agent in those tags.';
 
 // Cap on how many times a single agent turn may loop through tool calls.
 const MAX_TOOL_ITERATIONS = 5;

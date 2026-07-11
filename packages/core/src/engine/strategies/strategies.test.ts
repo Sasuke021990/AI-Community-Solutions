@@ -207,3 +207,47 @@ describe('RoundRobinStrategy with tools', () => {
     expect(chatSpy.mock.calls[0][0].tools).toHaveLength(1);
   });
 });
+
+describe('RoundRobinStrategy full-cycle behavior', () => {
+  it('runs every agent in one executeRound, even if an early agent emits <final_answer>', async () => {
+    // Reproduces the Design Thinking bug: the first agent (Empathizer) wrapped
+    // its stage-1 handoff in <final_answer>, which used to end the run after
+    // one turn. Now the whole cycle must run regardless.
+    const stages = ['Empathizer', 'Definer', 'Ideator', 'Prototyper', 'Tester'];
+    const agents = stages.map((name, i) => agent({ id: `a${i}`, name }));
+    const state = makeState({ agents });
+
+    const spoke: string[] = [];
+    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
+      const sys = req.messages[0].content;
+      const who = stages.find((s) => sys.includes(`named "${s}"`))!;
+      spoke.push(who);
+      // The first agent prematurely declares final; a later one also concludes.
+      if (who === 'Empathizer') return { message: { role: 'assistant', content: '<final_answer>premature</final_answer>' } };
+      if (who === 'Tester') return { message: { role: 'assistant', content: '<final_answer>real conclusion</final_answer>' } };
+      return { message: { role: 'assistant', content: `${who} did their part` } };
+    });
+
+    const strat = new RoundRobinStrategy();
+    const r = await strat.executeRound(state);
+
+    // All five stages ran, in order, within the single cycle.
+    expect(spoke).toEqual(stages);
+    // The last emitter in the cycle wins, not the premature early one.
+    expect(r.finalAnswer).toBe('real conclusion');
+  });
+
+  it('does not end the run when no agent declares a final answer', async () => {
+    const agents = [agent({ id: 'a0', name: 'One' }), agent({ id: 'a1', name: 'Two' })];
+    const state = makeState({ agents });
+    vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
+      message: { role: 'assistant', content: 'still working on it' }
+    });
+
+    const strat = new RoundRobinStrategy();
+    const r = await strat.executeRound(state);
+    expect(r.finalAnswer).toBeUndefined();
+    // both agents contributed to the transcript
+    expect(state.messages.filter((m) => m.role === 'assistant').length).toBe(2);
+  });
+});
