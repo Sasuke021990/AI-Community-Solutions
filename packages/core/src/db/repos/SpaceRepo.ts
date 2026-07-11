@@ -1,8 +1,9 @@
 import { Database as SQLiteDatabase } from 'better-sqlite3';
 import { Space } from '../../domain/types.js';
-import { SpaceStatus } from '../../domain/enums.js';
+import { Strategy, SpaceStatus } from '../../domain/enums.js';
 import { validateSpaceForPublish, ValidationIssue } from '../../domain/validation.js';
 import { AgentRepo } from './AgentRepo.js';
+import { SpaceRow } from '../rows.js';
 
 export class SpaceRepo {
   private agentRepo: AgentRepo;
@@ -72,13 +73,13 @@ export class SpaceRepo {
   }
 
   public get(id: string): Space | null {
-    const row = this.db.prepare('SELECT * FROM spaces WHERE id = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM spaces WHERE id = ?').get(id) as SpaceRow | undefined;
     if (!row) return null;
     return this.mapRowToSpace(row);
   }
 
   public list(): Space[] {
-    const rows = this.db.prepare('SELECT * FROM spaces').all() as any[];
+    const rows = this.db.prepare('SELECT * FROM spaces').all() as SpaceRow[];
     return rows.map(row => this.mapRowToSpace(row));
   }
 
@@ -95,12 +96,12 @@ export class SpaceRepo {
     return rows.map(r => r.mcp_server_id);
   }
 
-  private mapRowToSpace(row: any): Space {
+  private mapRowToSpace(row: SpaceRow): Space {
     return {
       id: row.id,
       name: row.name,
       description: row.description,
-      strategy: row.strategy,
+      strategy: row.strategy as Strategy,
       defaultModel: row.default_model,
       maxRounds: row.max_rounds,
       status: row.status as SpaceStatus,

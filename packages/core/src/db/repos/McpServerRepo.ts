@@ -1,5 +1,6 @@
 import { Database as SQLiteDatabase } from 'better-sqlite3';
 import { McpServerConfig } from '../../domain/types.js';
+import { McpServerRow } from '../rows.js';
 
 export class McpServerRepo {
   constructor(private db: SQLiteDatabase) {}
@@ -30,7 +31,7 @@ export class McpServerRepo {
   }
 
   public list(): McpServerConfig[] {
-    const rows = this.db.prepare('SELECT * FROM mcp_servers').all() as any[];
+    const rows = this.db.prepare('SELECT * FROM mcp_servers').all() as McpServerRow[];
     return rows.map(this.mapRowToConfig);
   }
 
@@ -51,14 +52,14 @@ export class McpServerRepo {
     return { success: true, affectedSpaces: [] };
   }
 
-  private mapRowToConfig(row: any): McpServerConfig {
+  private mapRowToConfig(row: McpServerRow): McpServerConfig {
     return {
       id: row.id,
       name: row.name,
-      transport: row.transport,
+      transport: row.transport as 'stdio' | 'http',
       command: row.command || undefined,
-      args: row.args ? JSON.parse(row.args) : undefined,
-      env: row.env ? JSON.parse(row.env) : undefined,
+      args: row.args ? (JSON.parse(row.args) as string[]) : undefined,
+      env: row.env ? (JSON.parse(row.env) as Record<string, string>) : undefined,
       url: row.url || undefined,
       enabled: row.enabled === 1,
       createdAt: row.created_at

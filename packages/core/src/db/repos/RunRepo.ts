@@ -1,6 +1,7 @@
 import { Database as SQLiteDatabase } from 'better-sqlite3';
 import { Run } from '../../domain/types.js';
 import { RunStatus } from '../../domain/enums.js';
+import { RunRow } from '../rows.js';
 
 export class RunRepo {
   constructor(private db: SQLiteDatabase) {}
@@ -43,13 +44,13 @@ export class RunRepo {
   }
 
   public get(id: string): Run | null {
-    const row = this.db.prepare('SELECT * FROM runs WHERE id = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM runs WHERE id = ?').get(id) as RunRow | undefined;
     if (!row) return null;
     return {
       id: row.id,
       spaceId: row.space_id,
       problem: row.problem,
-      status: row.status,
+      status: row.status as RunStatus,
       roundsUsed: row.rounds_used,
       finalAnswer: row.final_answer || undefined,
       pdfPath: row.pdf_path || undefined,

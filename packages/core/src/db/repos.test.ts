@@ -31,7 +31,9 @@ describe('Database and Repositories Integration', () => {
     dbWrapper.close();
     try {
       rmSync(dbPath, { force: true });
-    } catch (e) {}
+    } catch {
+      /* temp file may already be gone */
+    }
   });
 
   it('migrations are idempotent on re-open', () => {
@@ -94,6 +96,10 @@ describe('Database and Repositories Integration', () => {
 
     expect(() => agentRepo.update({
       id: agentId, spaceId, name: 'B', role: 'B', systemPrompt: 'B', position: 1, isOrchestrator: false
+    })).toThrowError(/Cannot modify agents when Space is published/);
+
+    expect(() => agentRepo.create({
+      id: randomUUID(), spaceId, name: 'C', role: 'C', systemPrompt: 'C', position: 2, isOrchestrator: false
     })).toThrowError(/Cannot modify agents when Space is published/);
   });
 
@@ -158,5 +164,37 @@ describe('Database and Repositories Integration', () => {
     expect(() => runRepo.create({
       id: runId2, spaceId, problem: 'P2', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now()
     })).not.toThrow();
+  });
+
+  it('run events auto-assign incrementing seq per run and list in order', () => {
+    const spaceId = randomUUID();
+    spaceRepo.create({
+      id: spaceId, name: 'S', description: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    const runId = randomUUID();
+    runRepo.create({ id: runId, spaceId, problem: 'P', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() });
+
+    // seq is assigned by the repo, not the caller
+    const e1 = runEventRepo.append({ id: randomUUID(), runId, type: RunEventType.RoundStart, payload: { round: 1 }, at: Date.now() });
+    const e2 = runEventRepo.append({ id: randomUUID(), runId, type: RunEventType.AgentMessage, payload: { text: 'second' }, at: Date.now() });
+    expect(e1.seq).toBe(1);
+    expect(e2.seq).toBe(2);
+
+    const events = runEventRepo.listByRun(runId);
+    expect(events.map(e => e.seq)).toEqual([1, 2]);
+    expect(events[0].type).toBe(RunEventType.RoundStart);
+    expect(events[1].payload).toEqual({ text: 'second' });
+
+    // seq is scoped per run: a separate run restarts at 1
+    const spaceId2 = randomUUID();
+    spaceRepo.create({
+      id: spaceId2, name: 'S2', description: 'S2', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    const runId2 = randomUUID();
+    runRepo.create({ id: runId2, spaceId: spaceId2, problem: 'P2', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() });
+    const other = runEventRepo.append({ id: randomUUID(), runId: runId2, type: RunEventType.System, payload: {}, at: Date.now() });
+    expect(other.seq).toBe(1);
   });
 });

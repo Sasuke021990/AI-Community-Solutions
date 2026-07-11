@@ -36,9 +36,17 @@ export class Database {
     let files: string[];
     try {
       files = readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
-    } catch {
-      // Migrations directory might not exist during some builds/tests, ignore or throw
-      return;
+    } catch (err) {
+      throw new Error(
+        `Migrations directory not found at "${migrationsDir}". ` +
+          `The .sql migration files must be bundled alongside the compiled output ` +
+          `(the build step copies them into dist/db/migrations). ` +
+          `Original error: ${(err as Error).message}`
+      );
+    }
+
+    if (files.length === 0) {
+      throw new Error(`No .sql migration files found in "${migrationsDir}".`);
     }
 
     const appliedResult = this.db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[];
