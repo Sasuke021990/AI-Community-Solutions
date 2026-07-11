@@ -122,6 +122,57 @@ describe('RunOrchestrator', () => {
     expect(received.length).toBe(eventRepo.listByRun('r1').length);
   });
 
+  it('aborts other in-flight concurrent calls when one call in a Promise.all batch fails', async () => {
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+
+    let workerBSawAbort = false;
+    vi.spyOn(lmClient, 'chat').mockImplementation((req, _onToken, signal) => {
+      const sys = typeof req.messages[0]?.content === 'string' ? req.messages[0].content : '';
+      if (sys.includes('orchestrator')) {
+        return Promise.resolve({
+          message: { role: 'assistant', content: '<task agent="A">do a</task><task agent="B">do b</task>' }
+        });
+      }
+      if (sys.includes('subtask: do a')) {
+        // Worker A fails immediately, simulating a stall timeout on one
+        // sibling call inside the orchestrator's concurrent dispatch.
+        return Promise.reject(new Error('Model stall timeout: no tokens received for 60000ms.'));
+      }
+      // Worker B hangs until its shared abort signal fires - proving the
+      // run-level failure actually cancels it instead of leaving it running
+      // in the background against LM Studio.
+      return new Promise((_resolve, reject) => {
+        if (signal?.aborted) {
+          workerBSawAbort = true;
+          reject(new Error('aborted'));
+          return;
+        }
+        signal?.addEventListener('abort', () => {
+          workerBSawAbort = true;
+          reject(new Error('aborted'));
+        });
+      });
+    });
+
+    const space = mkSpace({ strategy: Strategy.Orchestrator });
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [
+      { id: 'o', spaceId: 's1', name: 'Boss', role: 'Orchestrator', systemPrompt: 'orchestrator', isOrchestrator: true, position: 0 },
+      { id: 'a', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 },
+      { id: 'b', spaceId: 's1', name: 'B', role: 'B', systemPrompt: 'B', isOrchestrator: false, position: 2 }
+    ];
+
+    spaceRepo.create(space);
+    runRepo.create(run);
+
+    const engine = new RunOrchestrator(run, space, agents, [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter(4));
+    await engine.start();
+
+    expect(workerBSawAbort).toBe(true);
+    expect(runRepo.get('r1')?.status).toBe(RunStatus.Failed);
+  });
+
   it('manual stop marks only this run stopped and never touches other runs', async () => {
     const lmClient = new LmStudioClient();
     vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);

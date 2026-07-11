@@ -135,6 +135,15 @@ export class RunOrchestrator {
 
       this.runRepo.completeRun(this.state.run.id, finalAnswer);
     } catch (e: unknown) {
+      // A failure from anywhere in the round (including one call inside a
+      // concurrent Promise.all batch - orchestrator worker dispatch, debate
+      // propose/critique) must not leave sibling calls running in the
+      // background. Without this, a failed run keeps burning LM Studio
+      // capacity - each orphaned call eventually hits its own independent
+      // stall timeout and disconnects minutes later, well after the run
+      // already shows Failed.
+      this.abortController.abort();
+
       if (this.stopped) {
         // Manual stop: preserve the partial transcript, mark as stopped
         // (only this run — never touch other runs).
