@@ -21,3 +21,6 @@ export * from './mcp/McpClient.js';
 export { RunOrchestrator } from './engine/RunOrchestrator.js';
 export type { PersistedRunEvent } from './engine/RunOrchestrator.js';
 export * from './engine/strategies/index.js';
+
+// Role templates
+export * from './templates/roleTemplates.js';

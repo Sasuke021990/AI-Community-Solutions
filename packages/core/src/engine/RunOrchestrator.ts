@@ -1,4 +1,4 @@
-import { Run, Space, Agent } from '../domain/types.js';
+import { Run, Space, Agent, RunEvent } from '../domain/types.js';
 import { Strategy, RunStatus, RunEventType } from '../domain/enums.js';
 import { RunRepo, RunEventRepo } from '../db/repos/index.js';
 import { LmStudioClient, ConcurrencyLimiter, ChatMessage } from '../llm/index.js';
@@ -8,17 +8,18 @@ import {
   OrchestratorStrategy,
   RoundRobinStrategy,
   DebateStrategy,
-  ExecutionState,
-  EngineEvent
+  ExecutionState
 } from './strategies/index.js';
 import { randomUUID } from 'crypto';
 
-/** An event as persisted, delivered to live subscribers. */
-export interface PersistedRunEvent extends EngineEvent {
-  id: string;
-  runId: string;
-  at: number;
-}
+/**
+ * An event as persisted, delivered to live subscribers. This is exactly the
+ * RunEvent the repo stored (including its assigned seq) - live subscribers
+ * must see the same seq that a later `runEvents.listByRun()` replay would
+ * return, so the renderer can merge/sort/dedupe live and fetched events by
+ * a single consistent key.
+ */
+export type PersistedRunEvent = RunEvent;
 
 export class RunOrchestrator {
   private abortController = new AbortController();
@@ -51,19 +52,20 @@ export class RunOrchestrator {
       tools: [],
       callTool: (name, args) => this.callTool(name, args),
       onEvent: (e) => {
-        const persisted: PersistedRunEvent = {
+        // Persist before streaming: the transcript is the source of truth.
+        // Broadcast the repo's return value (not our own draft object) so
+        // live subscribers see the real assigned seq, not a seq-less copy.
+        const stored = this.runEventRepo.append({
           id: randomUUID(),
           runId: run.id,
           type: e.type,
           agentId: e.agentId,
           payload: e.payload,
           at: Date.now()
-        };
-        // Persist before streaming: the transcript is the source of truth.
-        this.runEventRepo.append(persisted);
+        });
         for (const cb of this.listeners) {
           try {
-            cb(persisted);
+            cb(stored);
           } catch {
             /* a subscriber error must not break the run */
           }

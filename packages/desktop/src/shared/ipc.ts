@@ -95,6 +95,7 @@ export const AgentInputSchema = z.object({
 });
 export const AgentUpdateSchema = AgentInputSchema.extend({ id: z.string().min(1) });
 export const AgentDeleteSchema = z.object({ id: z.string().min(1), spaceId: z.string().min(1) });
+export const AgentsListBySpaceSchema = z.object({ spaceId: z.string().min(1) });
 
 // ---- Runs -----------------------------------------------------------------------------
 
@@ -128,6 +129,7 @@ export const Channels = {
   spacesPublish: defineChannel('spaces:publish', IdSchema),
   spacesUnpublish: defineChannel('spaces:unpublish', IdSchema),
 
+  agentsListBySpace: defineChannel('agents:listBySpace', AgentsListBySpaceSchema),
   agentsCreate: defineChannel('agents:create', AgentInputSchema),
   agentsUpdate: defineChannel('agents:update', AgentUpdateSchema),
   agentsDelete: defineChannel('agents:delete', AgentDeleteSchema),
@@ -141,7 +143,13 @@ export const Channels = {
   modelsList: defineChannel('models:list', EmptySchema),
 
   settingsGet: defineChannel('settings:get', EmptySchema),
-  settingsSet: defineChannel('settings:set', SettingsPatchSchema)
+  settingsSet: defineChannel('settings:set', SettingsPatchSchema),
+
+  templatesList: defineChannel('templates:list', EmptySchema),
+  templatesRender: defineChannel(
+    'templates:render',
+    z.object({ templateId: z.string().min(1), agentName: z.string().min(1), spaceDescription: z.string() })
+  )
 } as const;
 
 export type ChannelName = (typeof Channels)[keyof typeof Channels]['name'];

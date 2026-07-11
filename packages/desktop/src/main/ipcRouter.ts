@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { Repositories, LmStudioClient, McpClientWrapper, SpaceStatus } from '@acs/core';
+import { Repositories, LmStudioClient, McpClientWrapper, SpaceStatus, listRoleTemplates, renderRoleTemplate } from '@acs/core';
 import { Channels, IpcResult } from '../shared/ipc.js';
 import { RunManager } from './RunManager.js';
 import { SettingsStore } from './SettingsStore.js';
@@ -98,6 +98,11 @@ export function createIpcRouter(deps: IpcRouterDeps) {
       return undefined;
     },
 
+    [Channels.agentsListBySpace.name]: async (p) => {
+      const { spaceId } = Channels.agentsListBySpace.requestSchema.parse(p);
+      return repos.agents.listBySpace(spaceId);
+    },
+
     [Channels.agentsCreate.name]: async (p) => {
       const input = Channels.agentsCreate.requestSchema.parse(p);
       const agent = { id: randomUUID(), ...input };
@@ -150,6 +155,15 @@ export function createIpcRouter(deps: IpcRouterDeps) {
     [Channels.settingsSet.name]: async (p) => {
       const patch = Channels.settingsSet.requestSchema.parse(p);
       return settingsStore.update(patch);
+    },
+
+    [Channels.templatesList.name]: async () => listRoleTemplates(),
+
+    [Channels.templatesRender.name]: async (p) => {
+      const { templateId, agentName, spaceDescription } = Channels.templatesRender.requestSchema.parse(p);
+      const template = listRoleTemplates().find((t) => t.id === templateId);
+      if (!template) throw new Error(`Role template "${templateId}" not found`);
+      return { content: renderRoleTemplate(template, { agentName, spaceDescription }) };
     }
   };
 

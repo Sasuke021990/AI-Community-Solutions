@@ -6,7 +6,8 @@ import type {
   Agent,
   Run,
   RunEvent,
-  PersistedRunEvent
+  PersistedRunEvent,
+  RoleTemplate
 } from '@acs/core';
 import type { Settings, SettingsPatch } from '../main/SettingsStore.js';
 
@@ -85,6 +86,7 @@ const api = {
     unpublish: (id: string) => invoke<void>(Channels.spacesUnpublish.name, { id })
   },
   agents: {
+    listBySpace: (spaceId: string) => invoke<Agent[]>(Channels.agentsListBySpace.name, { spaceId }),
     create: (input: AgentInput) => invoke<Agent>(Channels.agentsCreate.name, input),
     update: (input: AgentInput & { id: string }) => invoke<void>(Channels.agentsUpdate.name, input),
     delete: (id: string, spaceId: string) => invoke<void>(Channels.agentsDelete.name, { id, spaceId })
@@ -104,6 +106,11 @@ const api = {
   settings: {
     get: () => invoke<Settings>(Channels.settingsGet.name),
     set: (patch: SettingsPatch) => invoke<Settings>(Channels.settingsSet.name, patch)
+  },
+  templates: {
+    list: () => invoke<RoleTemplate[]>(Channels.templatesList.name),
+    render: (templateId: string, agentName: string, spaceDescription: string) =>
+      invoke<{ content: string }>(Channels.templatesRender.name, { templateId, agentName, spaceDescription })
   }
 };
 

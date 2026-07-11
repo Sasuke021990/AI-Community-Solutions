@@ -119,4 +119,44 @@ describe('ipcRouter', () => {
     expect(updated.ok).toBe(true);
     if (updated.ok) expect((updated.data as { concurrencyCap: number }).concurrencyCap).toBe(5);
   });
+
+  it('lists role templates', async () => {
+    const res = await router.handle(Channels.templatesList.name, {});
+    expect(res.ok).toBe(true);
+    if (res.ok) expect((res.data as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  it('renders a role template by id, substituting agentName and spaceDescription', async () => {
+    const list = await router.handle(Channels.templatesList.name, {});
+    const first = (list as { ok: true; data: { id: string }[] }).data[0];
+
+    const res = await router.handle(Channels.templatesRender.name, {
+      templateId: first.id, agentName: 'Ada', spaceDescription: 'ship a widget'
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const content = (res.data as { content: string }).content;
+      expect(content).toContain('Ada');
+      expect(content).not.toMatch(/\{\{.*?\}\}/);
+    }
+  });
+
+  it('returns an error for an unknown template id', async () => {
+    const res = await router.handle(Channels.templatesRender.name, {
+      templateId: 'not-a-real-id', agentName: 'Ada', spaceDescription: ''
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it('lists agents by space', async () => {
+    const spaceRes = await router.handle(Channels.spacesCreate.name, {
+      name: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5
+    });
+    const spaceId = (spaceRes as { ok: true; data: { id: string } }).data.id;
+    await router.handle(Channels.agentsCreate.name, { spaceId, name: 'A', role: 'R', systemPrompt: 'sys', position: 0 });
+
+    const listRes = await router.handle(Channels.agentsListBySpace.name, { spaceId });
+    expect(listRes.ok).toBe(true);
+    if (listRes.ok) expect((listRes.data as { name: string }[]).map((a) => a.name)).toEqual(['A']);
+  });
 });

@@ -27,6 +27,13 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
 
+  // Renderer console output (including uncaught React errors) is otherwise
+  // invisible outside devtools - forward it into the main process log so
+  // renderer-side failures show up wherever the app's own logs go.
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
