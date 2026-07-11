@@ -8,15 +8,25 @@ import {
   OrchestratorStrategy,
   RoundRobinStrategy,
   DebateStrategy,
-  ExecutionState
+  ExecutionState,
+  EngineEvent
 } from './strategies/index.js';
 import { randomUUID } from 'crypto';
+
+/** An event as persisted, delivered to live subscribers. */
+export interface PersistedRunEvent extends EngineEvent {
+  id: string;
+  runId: string;
+  at: number;
+}
 
 export class RunOrchestrator {
   private abortController = new AbortController();
   private strategy: AgentStrategy;
   private state: ExecutionState;
   private stopped = false;
+  private toolMap = new Map<string, { mcp: McpClientWrapper; originalName: string }>();
+  private listeners = new Set<(e: PersistedRunEvent) => void>();
 
   constructor(
     run: Run,
@@ -38,18 +48,35 @@ export class RunOrchestrator {
       lmStudioClient,
       concurrencyLimiter,
       messages: [],
+      tools: [],
+      callTool: (name, args) => this.callTool(name, args),
       onEvent: (e) => {
-        this.runEventRepo.append({
+        const persisted: PersistedRunEvent = {
           id: randomUUID(),
           runId: run.id,
           type: e.type,
           agentId: e.agentId,
           payload: e.payload,
           at: Date.now()
-        });
+        };
+        // Persist before streaming: the transcript is the source of truth.
+        this.runEventRepo.append(persisted);
+        for (const cb of this.listeners) {
+          try {
+            cb(persisted);
+          } catch {
+            /* a subscriber error must not break the run */
+          }
+        }
       },
       signal: this.abortController.signal
     };
+  }
+
+  /** Subscribe to live run events. Returns an unsubscribe function. */
+  public onEvent(cb: (e: PersistedRunEvent) => void): () => void {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
   }
 
   private createStrategy(type: Strategy): AgentStrategy {
@@ -77,6 +104,7 @@ export class RunOrchestrator {
       for (const mcp of this.state.mcpClients) {
         await mcp.connect();
       }
+      await this.buildToolRegistry();
 
       let finalAnswer: string | undefined;
       while (this.state.run.roundsUsed < this.state.space.maxRounds) {
@@ -117,6 +145,36 @@ export class RunOrchestrator {
       for (const mcp of this.state.mcpClients) {
         await mcp.close().catch(() => {});
       }
+    }
+  }
+
+  /** Collects tools from all connected MCP servers, namespaced as server__tool. */
+  private async buildToolRegistry(): Promise<void> {
+    for (const mcp of this.state.mcpClients) {
+      const { tools } = await mcp.listTools();
+      const server = mcp.name.replace(/[^A-Za-z0-9_-]/g, '_');
+      for (const t of tools) {
+        const namespaced = `${server}__${t.name}`;
+        this.toolMap.set(namespaced, { mcp, originalName: t.name });
+        this.state.tools.push({
+          type: 'function',
+          function: { name: namespaced, description: t.description, parameters: t.inputSchema }
+        });
+      }
+    }
+  }
+
+  /** Routes a namespaced tool call to its server; failures become error strings. */
+  private async callTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const entry = this.toolMap.get(name);
+    if (!entry) return `Error: tool "${name}" not found.`;
+    try {
+      const res = await entry.mcp.callTool(entry.originalName, args);
+      const content = res.content as { type: string; text?: string }[] | undefined;
+      if (!content) return '';
+      return content.map((c) => (c.type === 'text' ? (c.text ?? '') : `[${c.type} content]`)).join('\n');
+    } catch (e: unknown) {
+      return `Error calling tool "${name}": ${e instanceof Error ? e.message : String(e)}`;
     }
   }
 

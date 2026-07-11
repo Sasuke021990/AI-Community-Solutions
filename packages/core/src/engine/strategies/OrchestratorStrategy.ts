@@ -1,83 +1,64 @@
 import { AgentStrategy, ExecutionState } from './AgentStrategy.js';
-import { RunEventType } from '../../domain/enums.js';
-import { ChatMessage } from '../../llm/index.js';
+import { buildAgentMessages, callAgent, extractFinalAnswer } from './AgentCaller.js';
+
+interface TaskAssignment {
+  agentName: string;
+  task: string;
+}
+
+/** Parses <task agent="Name">description</task> blocks from orchestrator output. */
+export function parseTaskAssignments(content: string): TaskAssignment[] {
+  const re = /<task\s+agent="([^"]+)"\s*>([\s\S]*?)<\/task>/gi;
+  const out: TaskAssignment[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    out.push({ agentName: m[1].trim(), task: m[2].trim() });
+  }
+  return out;
+}
 
 export class OrchestratorStrategy implements AgentStrategy {
   public async executeRound(state: ExecutionState): Promise<{ finalAnswer?: string }> {
-    const orchestrator = state.agents.find(a => a.isOrchestrator);
+    const orchestrator = state.agents.find((a) => a.isOrchestrator);
     if (!orchestrator) throw new Error('Orchestrator not found');
+    const workers = state.agents.filter((a) => !a.isOrchestrator);
 
-    // Build context
-    const messages: ChatMessage[] = [
-      { role: 'system', content: orchestrator.systemPrompt },
-      { role: 'user', content: state.run.problem },
-      ...state.messages
-    ];
+    const plannerGuidance =
+      workers.length > 0
+        ? `You are the orchestrator. You may delegate subtasks to these workers: ${workers
+            .map((w) => w.name)
+            .join(', ')}. To delegate, output one or more <task agent="WorkerName">task description</task> blocks. ` +
+          `Review their results in later turns. When the problem is fully solved, output <final_answer>...</final_answer>.`
+        : 'You are the orchestrator. Solve the problem directly. When done, output <final_answer>...</final_answer>.';
 
-    // Collect tools
-    const tools: unknown[] = [];
-    for (const mcp of state.mcpClients) {
-      const mcpTools = await mcp.listTools();
-      for (const t of mcpTools.tools) {
-        tools.push({
-          type: 'function',
-          function: {
-            name: t.name,
-            description: t.description,
-            parameters: t.inputSchema
-          }
-        });
-      }
+    const planMessages = buildAgentMessages(orchestrator, state.run.problem, state.messages, plannerGuidance);
+    const planMsg = await callAgent(state, orchestrator, planMessages);
+    state.messages.push({ role: 'assistant', content: `ORCHESTRATOR: ${planMsg.content}` });
+
+    const finalAnswer = extractFinalAnswer(planMsg.content);
+    if (finalAnswer) return { finalAnswer };
+
+    const tasks = parseTaskAssignments(planMsg.content);
+    if (tasks.length === 0) {
+      // No delegation this turn; orchestrator continues next round.
+      return {};
     }
 
-    state.onEvent({ type: RunEventType.RoundStart, payload: { agentId: orchestrator.id, model: orchestrator.modelId || state.space.defaultModel } });
-
-    const response = await state.concurrencyLimiter.run(async () => {
-      return state.lmStudioClient.chat({
-        model: orchestrator.modelId || state.space.defaultModel,
-        messages,
-        tools: tools.length > 0 ? tools : undefined
-      }, () => {
-        // Stream token (could emit via event if desired)
-      }, state.signal);
-    }, state.signal);
-
-    const msg = response.message;
-    state.onEvent({ type: RunEventType.AgentMessage, agentId: orchestrator.id, payload: { message: msg } });
-    state.messages.push(msg);
-
-    const finalAnswerMatch = msg.content.match(/<final_answer>([\s\S]*?)<\/final_answer>/);
-    if (finalAnswerMatch) {
-      return { finalAnswer: finalAnswerMatch[1].trim() };
-    }
-
-    if (msg.tool_calls && msg.tool_calls.length > 0) {
-      for (const tc of msg.tool_calls) {
-        state.onEvent({ type: RunEventType.ToolCall, agentId: orchestrator.id, payload: { toolCall: tc } });
-        let resultStr = '';
-        try {
-          const args = JSON.parse(tc.function.arguments);
-          let handled = false;
-          for (const mcp of state.mcpClients) {
-            const mcpTools = await mcp.listTools();
-            if (mcpTools.tools.some(t => t.name === tc.function.name)) {
-              const res = await mcp.callTool(tc.function.name, args as Record<string, unknown>);
-              resultStr = (res.content as { type: string; text?: string }[]).map(c => c.type === 'text' ? c.text : '').join('\n');
-              handled = true;
-              break;
-            }
-          }
-          if (!handled) resultStr = `Tool ${tc.function.name} not found`;
-        } catch (e: unknown) {
-          if (e instanceof Error) {
-            resultStr = `Error calling tool: ${e.message}`;
-          }
+    // Dispatch independent subtasks to workers concurrently.
+    const results = await Promise.all(
+      tasks.map(async ({ agentName, task }) => {
+        const worker = workers.find((w) => w.name.toLowerCase() === agentName.toLowerCase());
+        if (!worker) {
+          return { name: agentName, content: `(no worker named "${agentName}" exists)` };
         }
+        const messages = buildAgentMessages(worker, state.run.problem, state.messages, `Your assigned subtask: ${task}`);
+        const msg = await callAgent(state, worker, messages);
+        return { name: worker.name, content: msg.content };
+      })
+    );
 
-        const toolMsg: ChatMessage = { role: 'tool', content: resultStr, name: tc.function.name, tool_call_id: tc.id };
-        state.messages.push(toolMsg);
-        state.onEvent({ type: RunEventType.ToolResult, agentId: orchestrator.id, payload: { result: resultStr, toolCallId: tc.id } });
-      }
+    for (const r of results) {
+      state.messages.push({ role: 'assistant', content: `WORKER ${r.name}: ${r.content}` });
     }
 
     return {};

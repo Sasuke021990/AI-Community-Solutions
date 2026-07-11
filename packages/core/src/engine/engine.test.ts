@@ -97,6 +97,31 @@ describe('RunOrchestrator', () => {
     expect(updated?.roundsUsed).toBe(2);
   });
 
+  it('streams live events to subscribers as the run progresses', async () => {
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+    vi.spyOn(lmClient, 'chat').mockResolvedValue({
+      message: { role: 'assistant', content: '<final_answer>hi</final_answer>' }
+    });
+
+    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    spaceRepo.create(space);
+    runRepo.create(run);
+
+    const engine = new RunOrchestrator(run, space, agents, [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+    const received: string[] = [];
+    const unsub = engine.onEvent((e) => received.push(e.type));
+
+    await engine.start();
+    unsub();
+
+    // Live stream matches what was persisted, and is non-empty.
+    expect(received.length).toBeGreaterThan(0);
+    expect(received.length).toBe(eventRepo.listByRun('r1').length);
+  });
+
   it('manual stop marks only this run stopped and never touches other runs', async () => {
     const lmClient = new LmStudioClient();
     vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);

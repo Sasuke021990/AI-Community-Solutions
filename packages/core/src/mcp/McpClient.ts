@@ -11,6 +11,10 @@ export class McpClientWrapper {
     this.client = new Client({ name: 'acs-core', version: '0.1.0' }, { capabilities: {} });
   }
 
+  public get name(): string {
+    return this.config.name;
+  }
+
   public async connect(): Promise<void> {
     if (this.config.transport === 'stdio') {
       if (!this.config.command) throw new Error('Stdio transport requires a command');

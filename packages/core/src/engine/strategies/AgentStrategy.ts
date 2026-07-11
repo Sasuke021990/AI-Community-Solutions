@@ -3,6 +3,21 @@ import { RunEventType } from '../../domain/enums.js';
 import { McpClientWrapper } from '../../mcp/McpClient.js';
 import { LmStudioClient, ConcurrencyLimiter, ChatMessage } from '../../llm/index.js';
 
+export interface OpenAiTool {
+  type: 'function';
+  function: {
+    name: string;
+    description?: string;
+    parameters?: unknown;
+  };
+}
+
+export interface EngineEvent {
+  type: RunEventType;
+  payload: Record<string, unknown>;
+  agentId?: string;
+}
+
 export interface ExecutionState {
   run: Run;
   space: Space;
@@ -11,7 +26,11 @@ export interface ExecutionState {
   lmStudioClient: LmStudioClient;
   concurrencyLimiter: ConcurrencyLimiter;
   messages: ChatMessage[];
-  onEvent: (event: { type: RunEventType, payload: Record<string, unknown>, agentId?: string }) => void;
+  /** OpenAI-format tool schemas offered to every agent (namespaced). */
+  tools: OpenAiTool[];
+  /** Resolves a namespaced tool call; never throws (returns an error string). */
+  callTool: (name: string, args: Record<string, unknown>) => Promise<string>;
+  onEvent: (event: EngineEvent) => void;
   signal?: AbortSignal;
 }
 

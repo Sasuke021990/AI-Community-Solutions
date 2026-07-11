@@ -1,6 +1,5 @@
 import { AgentStrategy, ExecutionState } from './AgentStrategy.js';
-import { RunEventType } from '../../domain/enums.js';
-import { ChatMessage } from '../../llm/index.js';
+import { buildAgentMessages, callAgent, extractFinalAnswer } from './AgentCaller.js';
 
 export class RoundRobinStrategy implements AgentStrategy {
   private currentIndex = 0;
@@ -12,30 +11,13 @@ export class RoundRobinStrategy implements AgentStrategy {
     const agent = agents[this.currentIndex % agents.length];
     this.currentIndex++;
 
-    const messages: ChatMessage[] = [
-      { role: 'system', content: agent.systemPrompt },
-      { role: 'user', content: state.run.problem },
-      ...state.messages
-    ];
+    const messages = buildAgentMessages(agent, state.run.problem, state.messages);
+    const msg = await callAgent(state, agent, messages);
 
-    state.onEvent({ type: RunEventType.RoundStart, payload: { agentId: agent.id, model: agent.modelId || state.space.defaultModel } });
+    // Record this agent's contribution in the shared transcript, attributed by name.
+    state.messages.push({ role: 'assistant', content: `${agent.name}: ${msg.content}` });
 
-    const response = await state.concurrencyLimiter.run(async () => {
-      return state.lmStudioClient.chat({
-        model: agent.modelId || state.space.defaultModel,
-        messages
-      }, () => {}, state.signal);
-    }, state.signal);
-
-    const msg = response.message;
-    state.onEvent({ type: RunEventType.AgentMessage, agentId: agent.id, payload: { message: msg } });
-    state.messages.push(msg);
-
-    const finalAnswerMatch = msg.content.match(/<final_answer>([\s\S]*?)<\/final_answer>/);
-    if (finalAnswerMatch) {
-      return { finalAnswer: finalAnswerMatch[1].trim() };
-    }
-
-    return {};
+    const finalAnswer = extractFinalAnswer(msg.content);
+    return finalAnswer ? { finalAnswer } : {};
   }
 }
