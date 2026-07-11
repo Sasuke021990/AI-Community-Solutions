@@ -145,27 +145,34 @@ The plan is phased so the core engine is provable early (via tests and a scratch
 
 ---
 
-## Phase 5 — Electron Shell & IPC Bridge
+## Phase 5 — Electron Shell & IPC Bridge ✅ (implemented as this repo's "Phase 4")
 
 **Goal**: Desktop app hosts the engine; renderer talks only through typed IPC.
 
 ### Tasks
 
-- [ ] Main process boot: open SQLite in `app.getPath('userData')`, run migrations, `RunRepo.markInterrupted()`, instantiate engine with settings
-- [ ] Settings store (JSON file in userData): LM Studio base URL, concurrency cap, reports folder
-- [ ] **Schema-first typed IPC contract** in a shared `packages/desktop/src/shared/ipc.ts`: one **Zod schema** per channel request/response; TS types derived via `z.infer<>` (single source of truth — compile-time types and runtime validation cannot drift). Channels for every repo + engine operation (`spaces:list`, `spaces:publish`, `runs:start`, `runs:stop`, `mcp:test`, `models:list`, `settings:get/set`, …) plus a push channel `runs:event` streaming RunEvents + status changes
-- [ ] A `defineChannel(name, requestSchema, responseSchema)` helper drives both main-process handler registration and the preload client, so a channel without a schema is structurally impossible
-- [ ] **Runtime validation at the trust boundary**: every main-process handler parses its payload with the channel schema before touching core; failures return `{ok:false, error:{code:'INVALID_PAYLOAD', details}}`. Zod validates *shape* only — business rules stay in core's validation module. Main→renderer event pushes are not runtime-validated (our own trusted output; YAGNI)
-- [ ] Preload script exposing `window.acs` API (contextIsolation on, no node in renderer); renderer-side thin client with TypeScript types shared from the contract file
-- [ ] Error convention: all IPC handlers return `{ok:true,data}|{ok:false,error:{code,message,details}}` — no thrown errors across the bridge
+- [x] Main process boot: open SQLite in `app.getPath('userData')`, run migrations, `RunRepo.markInterrupted()`, instantiate engine with settings
+- [x] Settings store (JSON file in userData): LM Studio base URL, concurrency cap, reports folder
+- [x] **Schema-first typed IPC contract** in a shared `packages/desktop/src/shared/ipc.ts`: one **Zod schema** per channel request; TS types derived from the schema itself. Channels for every repo + engine operation plus push channels `runs:event` / `runs:status`. *Deviation:* response payloads are not given separate Zod schemas — they reuse `@acs/core`'s existing TS types directly, since they're our own trusted output and duplicating them in Zod would risk drifting from the domain types (consistent with Decision #21's rationale, extended from push-channels to responses generally).
+- [x] A `defineChannel(name, requestSchema)` helper drives both main-process handler registration and the preload client
+- [x] **Runtime validation at the trust boundary**: every handler parses its payload with the channel schema; failures return `{ok:false, error:{code:'INVALID_PAYLOAD', details}}`
+- [x] Preload script exposing `window.acs` API (contextIsolation on); renderer-side types shared from the preload module
+- [x] Error convention: `{ok:true,data}|{ok:false,error:{code,message,details}}` — no thrown errors across the bridge
 
 ### Deliverables
 
-- Renderer can list/create Spaces and receive live run events from a dev console (no real UI yet)
+- [x] Renderer can list/create Spaces and receive live run events from a dev console (no real UI yet)
 
 ### Acceptance criteria
 
-- Manual smoke: start a run from devtools console; events stream to renderer; stop works; app relaunch marks interrupted runs failed
+- [x] Manual smoke: start a run from devtools console; events stream to renderer; stop works; app relaunch marks interrupted runs failed — verified by actually launching the compiled Electron app (not just automated tests)
+
+### Process fixes discovered only by booting the real app (none caught by lint/build/test until forced)
+
+- `@acs/desktop` needed `"type": "module"` — `@acs/core` is ESM; Electron main can't `require()` it synchronously.
+- Added `typecheck` scripts (`tsc --noEmit`) to both packages plus a root `verify` script, since `electron-vite`'s esbuild pipeline — like Vitest's — does not type-check and had already let two real type errors through undetected.
+- `electron-vite` renames the preload bundle to `index.mjs` once the package is ESM; the hardcoded `index.js` path would have silently broken the preload bridge with no error at all.
+- `better-sqlite3`'s native binding targets the system Node ABI, not Electron's bundled Node ABI. Added `@electron/rebuild` and a `postinstall: electron-rebuild -f -w better-sqlite3` script — the exact mitigation this plan's risk table below already called for.
 
 ---
 
