@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import { join } from 'path';
 import { openDatabase, createRepositories, LmStudioClient, ConcurrencyLimiter } from '@acs/core';
 import { Channels } from '../shared/ipc.js';
@@ -40,6 +40,13 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // No File/Edit/View/Window/Help bar in the real app. The menu (and its
+  // devtools/reload shortcuts) is kept only when running against the
+  // electron-vite dev server, where devtools access matters.
+  if (!process.env['ELECTRON_RENDERER_URL']) {
+    Menu.setApplicationMenu(null);
+  }
+
   const userDataDir = app.getPath('userData');
 
   const db = openDatabase(join(userDataDir, 'acs.sqlite'));
@@ -51,12 +58,18 @@ app.whenReady().then(() => {
     reportsFolder: join(userDataDir, 'reports')
   });
 
-  let lmStudioClient = new LmStudioClient(settingsStore.get().lmStudioBaseUrl);
+  const buildClient = (s = settingsStore.get()) =>
+    new LmStudioClient(s.lmStudioBaseUrl, {
+      firstTokenTimeoutMs: s.firstTokenTimeoutSec * 1000,
+      interTokenTimeoutMs: s.interTokenTimeoutSec * 1000
+    });
+
+  let lmStudioClient = buildClient();
   const concurrencyLimiter = new ConcurrencyLimiter(settingsStore.get().concurrencyCap);
 
   // Keep the client/limiter in sync whenever settings change via IPC.
   settingsStore.onChange((s) => {
-    lmStudioClient = new LmStudioClient(s.lmStudioBaseUrl);
+    lmStudioClient = buildClient(s);
     concurrencyLimiter.setLimit(s.concurrencyCap);
   });
 

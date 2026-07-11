@@ -111,9 +111,7 @@ const api = {
     set: (patch: SettingsPatch) => invoke<Settings>(Channels.settingsSet.name, patch)
   },
   templates: {
-    list: () => invoke<RoleTemplate[]>(Channels.templatesList.name),
-    render: (templateId: string, agentName: string, spaceDescription: string) =>
-      invoke<{ content: string }>(Channels.templatesRender.name, { templateId, agentName, spaceDescription })
+    list: () => invoke<RoleTemplate[]>(Channels.templatesList.name)
   }
 };
 

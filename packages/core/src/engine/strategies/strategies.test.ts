@@ -31,6 +31,19 @@ function makeState(over: Partial<ExecutionState> = {}): ExecutionState {
   return state;
 }
 
+describe('buildAgentMessages identity injection', () => {
+  it('injects the agent name at run time even though the stored prompt is generic', () => {
+    const a = agent({ name: 'Black Hat Bob', systemPrompt: 'You are a risk assessor. Find failure modes.' });
+    const messages = buildAgentMessages(a, 'should we ship?', []);
+    const system = messages[0].content;
+    expect(messages[0].role).toBe('system');
+    expect(system).toContain('You are the agent named "Black Hat Bob".');
+    expect(system).toContain('You are a risk assessor.');
+    // Identity comes first, before the role prompt.
+    expect(system.indexOf('Black Hat Bob')).toBeLessThan(system.indexOf('risk assessor'));
+  });
+});
+
 describe('AgentCaller tool loop', () => {
   it('runs a tool call, feeds the result back, and returns the final message', async () => {
     const state = makeState({

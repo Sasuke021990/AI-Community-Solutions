@@ -109,7 +109,9 @@ export const RunsEventsSchema = z.object({ runId: z.string().min(1) });
 export const SettingsPatchSchema = z.object({
   lmStudioBaseUrl: z.string().url().optional(),
   concurrencyCap: z.number().int().min(1).max(8).optional(),
-  reportsFolder: z.string().min(1).optional()
+  reportsFolder: z.string().min(1).optional(),
+  firstTokenTimeoutSec: z.number().int().min(10).max(900).optional(),
+  interTokenTimeoutSec: z.number().int().min(10).max(900).optional()
 });
 
 // ---- Channel registry -------------------------------------------------------------------
@@ -145,11 +147,7 @@ export const Channels = {
   settingsGet: defineChannel('settings:get', EmptySchema),
   settingsSet: defineChannel('settings:set', SettingsPatchSchema),
 
-  templatesList: defineChannel('templates:list', EmptySchema),
-  templatesRender: defineChannel(
-    'templates:render',
-    z.object({ templateId: z.string().min(1), agentName: z.string().min(1), spaceDescription: z.string() })
-  )
+  templatesList: defineChannel('templates:list', EmptySchema)
 } as const;
 
 export type ChannelName = (typeof Channels)[keyof typeof Channels]['name'];

@@ -165,32 +165,14 @@ describe('ipcRouter', () => {
     if (updated.ok) expect((updated.data as { concurrencyCap: number }).concurrencyCap).toBe(5);
   });
 
-  it('lists role templates', async () => {
+  it('lists role templates with ready-to-copy generic prompts', async () => {
     const res = await router.handle(Channels.templatesList.name, {});
     expect(res.ok).toBe(true);
-    if (res.ok) expect((res.data as unknown[]).length).toBeGreaterThan(0);
-  });
-
-  it('renders a role template by id, substituting agentName and spaceDescription', async () => {
-    const list = await router.handle(Channels.templatesList.name, {});
-    const first = (list as { ok: true; data: { id: string }[] }).data[0];
-
-    const res = await router.handle(Channels.templatesRender.name, {
-      templateId: first.id, agentName: 'Ada', spaceDescription: 'ship a widget'
-    });
-    expect(res.ok).toBe(true);
     if (res.ok) {
-      const content = (res.data as { content: string }).content;
-      expect(content).toContain('Ada');
-      expect(content).not.toMatch(/\{\{.*?\}\}/);
+      const templates = res.data as { systemPrompt: string }[];
+      expect(templates.length).toBeGreaterThan(0);
+      for (const t of templates) expect(t.systemPrompt).not.toMatch(/\{\{.*?\}\}/);
     }
-  });
-
-  it('returns an error for an unknown template id', async () => {
-    const res = await router.handle(Channels.templatesRender.name, {
-      templateId: 'not-a-real-id', agentName: 'Ada', spaceDescription: ''
-    });
-    expect(res.ok).toBe(false);
   });
 
   it('lists agents by space', async () => {

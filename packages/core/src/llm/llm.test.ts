@@ -259,4 +259,78 @@ describe('LmStudioClient', () => {
       vi.useRealTimers();
     }
   });
+
+  it('contentless initial chunk does NOT demote the clock to the inter-token window', async () => {
+    // Diagnosed live against LM Studio: a request accepted while another
+    // generation is busy can receive an immediate role-only SSE chunk and
+    // then silence. That junk chunk must not flip the stall clock from the
+    // generous first-token budget to the strict inter-token window.
+    vi.useFakeTimers();
+    try {
+      // @ts-expect-error vi mock
+      global.fetch.mockImplementation((_url: string, opts: { signal: AbortSignal }) => {
+        let sentRoleChunk = false;
+        const stream = new ReadableStream({
+          pull(controller) {
+            if (!sentRoleChunk) {
+              sentRoleChunk = true;
+              // Role-only delta: no content, no tool_calls.
+              controller.enqueue(
+                new TextEncoder().encode('data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n')
+              );
+              return;
+            }
+            return new Promise<void>((_res, rej) => {
+              opts.signal.addEventListener('abort', () => rej(new Error('aborted')));
+            });
+          }
+        });
+        return Promise.resolve({ ok: true, body: stream });
+      });
+
+      const p = client.chat(
+        { model: 'm', messages: [{ role: 'user', content: 'Hi' }] },
+        () => {},
+        undefined,
+        { firstTokenTimeoutMs: 5000, interTokenTimeoutMs: 1000, overallTimeoutMs: 600000 }
+      );
+      const assertion = expect(p).rejects.toThrow(/stall timeout: no tokens received for 5000ms/i);
+
+      // Under the OLD behavior the role-only chunk would arm the 1000ms
+      // inter-token timer and the call would die here. It must survive.
+      await vi.advanceTimersByTimeAsync(2000);
+
+      // It fails only when the full first-token budget elapses.
+      await vi.advanceTimersByTimeAsync(3000);
+      await assertion;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('uses the constructor-level default stall config when no per-call config is given', async () => {
+    vi.useFakeTimers();
+    try {
+      // @ts-expect-error vi mock
+      global.fetch.mockImplementation((_url: string, opts: { signal: AbortSignal }) => {
+        return new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        });
+      });
+
+      const configured = new LmStudioClient('http://localhost:1234/v1', { firstTokenTimeoutMs: 500 });
+      const p = configured.chat({ model: 'm', messages: [{ role: 'user', content: 'Hi' }] }, () => {});
+      const assertion = expect(p).rejects.toThrow(/stall timeout: no tokens received for 500ms/i);
+      await vi.advanceTimersByTimeAsync(500);
+      await assertion;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { Repositories, LmStudioClient, McpClientWrapper, Space, SpaceStatus, listRoleTemplates, renderRoleTemplate } from '@acs/core';
+import { Repositories, LmStudioClient, McpClientWrapper, Space, SpaceStatus, listRoleTemplates } from '@acs/core';
 import { Channels, IpcResult } from '../shared/ipc.js';
 import { RunManager } from './RunManager.js';
 import { SettingsStore } from './SettingsStore.js';
@@ -170,14 +170,7 @@ export function createIpcRouter(deps: IpcRouterDeps) {
       return settingsStore.update(patch);
     },
 
-    [Channels.templatesList.name]: async () => listRoleTemplates(),
-
-    [Channels.templatesRender.name]: async (p) => {
-      const { templateId, agentName, spaceDescription } = Channels.templatesRender.requestSchema.parse(p);
-      const template = listRoleTemplates().find((t) => t.id === templateId);
-      if (!template) throw new Error(`Role template "${templateId}" not found`);
-      return { content: renderRoleTemplate(template, { agentName, spaceDescription }) };
-    }
+    [Channels.templatesList.name]: async () => listRoleTemplates()
   };
 
   return {

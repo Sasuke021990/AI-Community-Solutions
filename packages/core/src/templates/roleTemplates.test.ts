@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listRoleTemplates, renderRoleTemplate } from './roleTemplates.js';
+import { listRoleTemplates } from './roleTemplates.js';
 
 describe('listRoleTemplates', () => {
   it('returns at least the starter set, all with unique ids and required fields', () => {
@@ -9,7 +9,13 @@ describe('listRoleTemplates', () => {
     for (const t of templates) {
       expect(t.name).toBeTruthy();
       expect(t.description).toBeTruthy();
-      expect(t.systemPromptTemplate).toContain('{{agentName}}');
+      expect(t.systemPrompt.length).toBeGreaterThan(200); // professional-grade, not a one-liner
+    }
+  });
+
+  it('prompts are generic: no template placeholders remain', () => {
+    for (const t of listRoleTemplates()) {
+      expect(t.systemPrompt).not.toMatch(/\{\{.*?\}\}/);
     }
   });
 
@@ -18,29 +24,5 @@ describe('listRoleTemplates', () => {
     for (const hat of ['white-hat', 'red-hat', 'black-hat', 'yellow-hat', 'green-hat', 'blue-hat']) {
       expect(ids).toContain(hat);
     }
-  });
-});
-
-describe('renderRoleTemplate', () => {
-  it('substitutes agentName and spaceDescription with no leftover placeholders', () => {
-    const [template] = listRoleTemplates();
-    const rendered = renderRoleTemplate(template, { agentName: 'Ada', spaceDescription: 'ship a widget' });
-    expect(rendered).toContain('Ada');
-    expect(rendered).toContain('ship a widget');
-    expect(rendered).not.toMatch(/\{\{.*?\}\}/);
-  });
-
-  it('falls back to a generic phrase when spaceDescription is empty', () => {
-    const [template] = listRoleTemplates();
-    const rendered = renderRoleTemplate(template, { agentName: 'Ada', spaceDescription: '' });
-    expect(rendered).not.toMatch(/\{\{.*?\}\}/);
-    expect(rendered.length).toBeGreaterThan(0);
-  });
-
-  it('is a pure copy: rendering twice never mutates the source template', () => {
-    const [template] = listRoleTemplates();
-    const before = template.systemPromptTemplate;
-    renderRoleTemplate(template, { agentName: 'X', spaceDescription: 'Y' });
-    expect(template.systemPromptTemplate).toBe(before);
   });
 });

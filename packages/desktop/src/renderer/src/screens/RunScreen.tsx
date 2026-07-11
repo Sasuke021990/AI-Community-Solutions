@@ -109,6 +109,15 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
     }
   }
 
+  /** Clears the finished run from view (nothing is deleted; History keeps it). */
+  function newRun() {
+    runIdRef.current = null;
+    seenEventIds.current = new Set();
+    setEvents([]);
+    setRun(null);
+    setError(null);
+  }
+
   if (loading) return <div className="empty-state">Loading...</div>;
   if (!space) return <div className="empty-state">{error ?? 'Space not found.'}</div>;
 
@@ -155,9 +164,13 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
               <StatusBadge status={run.status} />
               <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>{run.problem}</span>
             </div>
-            {isRunning && (
+            {isRunning ? (
               <button className="btn btn-danger" onClick={stop} disabled={stopping}>
                 {stopping ? 'Stopping...' : 'Stop'}
+              </button>
+            ) : (
+              <button className="btn" onClick={newRun} title="Clear this result and start fresh (kept in History)">
+                New run
               </button>
             )}
           </div>

@@ -4,7 +4,6 @@ import { call } from '../lib/api.js';
 
 interface AgentEditorProps {
   spaceId: string;
-  spaceDescription: string;
   strategy: Strategy;
   roleTemplates: RoleTemplate[];
   models: string[];
@@ -16,7 +15,6 @@ interface AgentEditorProps {
 
 export function AgentEditor({
   spaceId,
-  spaceDescription,
   strategy,
   roleTemplates,
   models,
@@ -40,20 +38,15 @@ export function AgentEditor({
     nameInputRef.current?.focus();
   }, []);
 
-  async function applyTemplate(id: string) {
+  function applyTemplate(id: string) {
     setTemplateId(id);
     if (id === 'custom') return;
     const template = roleTemplates.find((t) => t.id === id);
     if (!template) return;
-    try {
-      const { content } = await call(
-        window.acs.templates.render(template.id, name.trim() || 'Agent', spaceDescription)
-      );
-      setSystemPrompt(content);
-      setRole(template.name);
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    // Copy-on-create: templates are complete generic prompts; the engine
+    // injects the agent's identity at run time.
+    setSystemPrompt(template.systemPrompt);
+    setRole(template.name);
   }
 
   async function save() {

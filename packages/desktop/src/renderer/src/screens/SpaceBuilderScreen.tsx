@@ -394,7 +394,6 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
               <AgentEditor
                 key={agent.id}
                 spaceId={space.id}
-                spaceDescription={form.description}
                 strategy={form.strategy}
                 roleTemplates={roleTemplates}
                 models={models}
@@ -439,7 +438,6 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
           {editingAgent === 'new' && (
             <AgentEditor
               spaceId={space.id}
-              spaceDescription={form.description}
               strategy={form.strategy}
               roleTemplates={roleTemplates}
               models={models}

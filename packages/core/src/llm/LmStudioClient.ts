@@ -13,7 +13,10 @@ const DEFAULT_STALL_CONFIG: Required<StallConfig> = {
 };
 
 export class LmStudioClient {
-  constructor(private baseUrl: string = 'http://localhost:1234/v1') {}
+  constructor(
+    private baseUrl: string = 'http://localhost:1234/v1',
+    private defaultStallConfig: StallConfig = {}
+  ) {}
 
   public async listModels(signal?: AbortSignal): Promise<string[]> {
     try {
@@ -35,9 +38,9 @@ export class LmStudioClient {
     request: ChatRequest,
     onToken: (token: string) => void,
     signal?: AbortSignal,
-    stallConfig: StallConfig = DEFAULT_STALL_CONFIG
+    stallConfig?: StallConfig
   ): Promise<ChatResponse> {
-    const timeouts = { ...DEFAULT_STALL_CONFIG, ...stallConfig };
+    const timeouts = { ...DEFAULT_STALL_CONFIG, ...this.defaultStallConfig, ...stallConfig };
 
     const abortController = new AbortController();
     const onSignalAbort = () => abortController.abort();
@@ -88,6 +91,14 @@ export class LmStudioClient {
       // Buffer holds any partial trailing line between reads, since chunk
       // boundaries do not align with SSE line boundaries.
       let buffer = '';
+      // The strict inter-token clock only applies once REAL generation has
+      // begun. LM Studio (and other OpenAI-compatible servers) may send an
+      // initial contentless chunk (role delta / stream open) immediately on
+      // accepting a request that then waits behind another generation -
+      // demoting the stall clock from the generous first-token budget to the
+      // strict inter-token window on that junk chunk guarantees a false
+      // "stall" for any queued request (diagnosed live against LM Studio).
+      let sawRealContent = false;
 
       const processLine = (line: string) => {
         const trimmed = line.trim();
@@ -105,6 +116,10 @@ export class LmStudioClient {
 
         const delta = data.choices?.[0]?.delta;
         if (!delta) return;
+
+        if (delta.content || delta.tool_calls) {
+          sawRealContent = true;
+        }
 
         if (delta.content) {
           finalContent += delta.content;
@@ -135,13 +150,20 @@ export class LmStudioClient {
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
-        resetStallTimer(timeouts.interTokenTimeoutMs);
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         // Keep the last (possibly incomplete) line for the next chunk.
         buffer = lines.pop() ?? '';
         for (const line of lines) processLine(line);
+
+        // Content-aware stall clock: switch to (or keep resetting) the
+        // strict inter-token window only after real content/tool_calls have
+        // arrived. Contentless traffic leaves the first-token budget
+        // (measured from request send) untouched.
+        if (sawRealContent) {
+          resetStallTimer(timeouts.interTokenTimeoutMs);
+        }
       }
 
       // Flush any decoder + buffer remainder as a final complete line.

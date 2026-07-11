@@ -5,6 +5,10 @@ export interface Settings {
   lmStudioBaseUrl: string;
   concurrencyCap: number;
   reportsFolder: string;
+  /** Budget for queueing + prompt processing before the first real token (seconds). */
+  firstTokenTimeoutSec: number;
+  /** Max silence between tokens once generation has actually started (seconds). */
+  interTokenTimeoutSec: number;
 }
 
 export type SettingsPatch = Partial<Settings>;
@@ -12,7 +16,9 @@ export type SettingsPatch = Partial<Settings>;
 const DEFAULTS: Settings = {
   lmStudioBaseUrl: 'http://localhost:1234/v1',
   concurrencyCap: 2,
-  reportsFolder: ''
+  reportsFolder: '',
+  firstTokenTimeoutSec: 120,
+  interTokenTimeoutSec: 60
 };
 
 /**

@@ -12,14 +12,20 @@ const COLLAB_INSTRUCTIONS =
 // Cap on how many times a single agent turn may loop through tool calls.
 const MAX_TOOL_ITERATIONS = 5;
 
-/** Builds the message list for an agent turn: role prompt + collaboration + context. */
+/**
+ * Builds the message list for an agent turn: identity + role prompt +
+ * collaboration + context. Identity is injected here at run time - role
+ * templates are generic and contain no agent name, but agents must still
+ * know who they are (the orchestrator addresses workers by name).
+ */
 export function buildAgentMessages(
   agent: Agent,
   problem: string,
   transcript: ChatMessage[],
   extraSystem?: string
 ): ChatMessage[] {
-  const system = [agent.systemPrompt, COLLAB_INSTRUCTIONS, extraSystem].filter(Boolean).join('\n\n');
+  const identity = `You are the agent named "${agent.name}".`;
+  const system = [identity, agent.systemPrompt, COLLAB_INSTRUCTIONS, extraSystem].filter(Boolean).join('\n\n');
   return [
     { role: 'system', content: system },
     { role: 'user', content: problem },

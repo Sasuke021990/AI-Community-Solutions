@@ -16,6 +16,8 @@ describe('SettingsStore', () => {
     const store = new SettingsStore(join(dir, 'settings.json'));
     expect(store.get().lmStudioBaseUrl).toBe('http://localhost:1234/v1');
     expect(store.get().concurrencyCap).toBe(2);
+    expect(store.get().firstTokenTimeoutSec).toBe(120);
+    expect(store.get().interTokenTimeoutSec).toBe(60);
   });
 
   it('merges caller-supplied defaults', () => {

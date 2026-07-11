@@ -5,6 +5,8 @@ interface SettingsForm {
   lmStudioBaseUrl: string;
   concurrencyCap: number;
   reportsFolder: string;
+  firstTokenTimeoutSec: number;
+  interTokenTimeoutSec: number;
 }
 
 export function SettingsScreen() {
@@ -83,7 +85,39 @@ export function SettingsScreen() {
             onChange={(e) => setForm({ ...form, concurrencyCap: Number(e.target.value) })}
           />
           <div className="field-hint">
-            How many LM Studio requests may run at once. Lower this if LM Studio crashes or hangs under load.
+            How many LM Studio requests may run at once. A single warm model handles 2+ fine, but agents assigned{' '}
+            <strong>different models</strong> will starve each other on one GPU - keep this at 1 if your agents use
+            model overrides, or give all agents the same model.
+          </div>
+        </div>
+
+        <div className="field">
+          <label>First-token timeout (seconds)</label>
+          <input
+            type="number"
+            min={10}
+            max={900}
+            value={form.firstTokenTimeoutSec}
+            onChange={(e) => setForm({ ...form, firstTokenTimeoutSec: Number(e.target.value) })}
+          />
+          <div className="field-hint">
+            Budget for queueing + prompt processing before generation starts. Raise this if runs fail while LM Studio
+            still shows &quot;Processing prompt&quot;.
+          </div>
+        </div>
+
+        <div className="field">
+          <label>Inter-token stall timeout (seconds)</label>
+          <input
+            type="number"
+            min={10}
+            max={900}
+            value={form.interTokenTimeoutSec}
+            onChange={(e) => setForm({ ...form, interTokenTimeoutSec: Number(e.target.value) })}
+          />
+          <div className="field-hint">
+            Max silence between tokens once generation has started. Raise this on slow hardware or when running
+            multiple models.
           </div>
         </div>
 
