@@ -31,7 +31,10 @@ export function AgentEditor({
   const [modelId, setModelId] = useState(existingAgent?.modelId ?? '');
   const [isOrchestrator, setIsOrchestrator] = useState(existingAgent?.isOrchestrator ?? false);
   const [templateId, setTemplateId] = useState('custom');
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // For a locked (preset) agent, the system prompt and model override are the
+  // ONLY editable fields - and they live behind this toggle. Default it open so
+  // a locked agent doesn't look entirely read-only at a glance.
+  const [showAdvanced, setShowAdvanced] = useState(locked);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);

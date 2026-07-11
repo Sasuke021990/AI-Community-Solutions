@@ -324,7 +324,7 @@ describe('Database and Repositories Integration', () => {
 
     // Space update: model/rounds succeeds
     spaceRepo.update({ id: spaceId, name: 'OrigName', description: 'OrigDesc', strategy: Strategy.RoundRobin, defaultModel: 'm2', maxRounds: 10, status: SpaceStatus.Draft, presetId, createdAt: Date.now(), updatedAt: Date.now() });
-    let updatedSpace = spaceRepo.get(spaceId)!;
+    const updatedSpace = spaceRepo.get(spaceId)!;
     expect(updatedSpace.defaultModel).toBe('m2');
     expect(updatedSpace.maxRounds).toBe(10);
 

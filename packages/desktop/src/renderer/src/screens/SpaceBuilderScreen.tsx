@@ -222,9 +222,10 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
   if (loading) return <div className="empty-state">Loading...</div>;
 
   const isPublished = space?.status === 'published';
-  const isPreset = !!(space as any)?.presetId;
-  const isLocked = isPublished || isPreset;
-  const isEditingLocked = isPublished || isPreset; // To keep it clear which operations are blocked by presets
+  const isPreset = !!space?.presetId;
+  // Name/description/strategy are locked when the Space is published OR when it
+  // came from a preset (its structure is fixed either way).
+  const isEditingLocked = isPublished || isPreset;
 
   const sortedAgents = [...agents].sort((a, b) => a.position - b.position);
   const strategyLabel = STRATEGIES.find((s) => s.value === form.strategy)?.label;
