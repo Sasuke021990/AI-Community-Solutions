@@ -116,6 +116,18 @@ export function SpacesHomeScreen({ onOpenPresets, onOpenBuilder, onOpenRun }: Sp
                 >
                   {s.status === 'published' ? 'View' : 'Edit'}
                 </button>
+                {s.latestPdfPath && (
+                  <button
+                    className="btn-link"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      call(window.acs.runs.openPdf(s.latestPdfPath!)).catch((err: Error) => setError(err.message));
+                    }}
+                    title="Open the PDF report from the most recent run"
+                  >
+                    Open PDF
+                  </button>
+                )}
                 {!s.hasActiveRun && (
                   <button
                     className="btn-link"

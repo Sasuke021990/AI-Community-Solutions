@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { existsSync } from 'fs';
 import { Repositories, LmStudioClient, McpClientWrapper, Space, SpaceStatus, listRoleTemplates, listSpacePresets, SpacePreset, fetchWebhook } from '@acs/core';
 import { Channels, IpcResult } from '../shared/ipc.js';
 import { RunManager } from './RunManager.js';
@@ -10,7 +11,7 @@ import { SettingsStore } from './SettingsStore.js';
  * fact from joining against the runs table, not a property of a Space, so
  * it's attached only at the IPC response boundary.
  */
-export type SpaceWithActivity = Space & { hasActiveRun: boolean };
+export type SpaceWithActivity = Space & { hasActiveRun: boolean; latestPdfPath?: string };
 
 export type PresetWithStatus = SpacePreset & { existingSpaceId: string | null };
 
@@ -42,7 +43,8 @@ export function createIpcRouter(deps: IpcRouterDeps) {
 
   const withActivity = (space: Space): SpaceWithActivity => ({
     ...space,
-    hasActiveRun: repos.runs.hasActiveRun(space.id)
+    hasActiveRun: repos.runs.hasActiveRun(space.id),
+    latestPdfPath: repos.runs.listBySpace(space.id)[0]?.pdfPath
   });
 
   const handlers: Record<string, Handler> = {
@@ -202,6 +204,13 @@ export function createIpcRouter(deps: IpcRouterDeps) {
 
     [Channels.runsOpenPdf.name]: async (p) => {
       const { path } = Channels.runsOpenPdf.requestSchema.parse(p);
+      // A clear, specific message beats shell.openPath's raw OS error - most
+      // often this means the report is still generating (the UI should have
+      // disabled the button, but the file may also have been moved/deleted
+      // since).
+      if (!existsSync(path)) {
+        throw new Error('This report file no longer exists - it may have been moved or deleted, or is still generating. Try again in a moment.');
+      }
       const err = await deps.openPath(path);
       if (err) throw new Error(err);
       return undefined;
@@ -209,6 +218,9 @@ export function createIpcRouter(deps: IpcRouterDeps) {
 
     [Channels.runsShowInFolder.name]: async (p) => {
       const { path } = Channels.runsShowInFolder.requestSchema.parse(p);
+      if (!existsSync(path)) {
+        throw new Error('This report file no longer exists - it may have been moved or deleted, or is still generating. Try again in a moment.');
+      }
       deps.showInFolder(path);
       return undefined;
     },

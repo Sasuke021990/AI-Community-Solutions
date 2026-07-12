@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { openDatabase, createRepositories, Repositories, LmStudioClient, Strategy, SpaceStatus, RunStatus } from '@acs/core';
 import { createIpcRouter } from './ipcRouter.js';
 import { RunManager } from './RunManager.js';
@@ -209,6 +209,37 @@ describe('ipcRouter', () => {
     if (getResRunning.ok) expect((getResRunning.data as { hasActiveRun: boolean }).hasActiveRun).toBe(true);
   });
 
+  it('spaces:list/get annotate latestPdfPath from the most recent run, undefined when none has one', async () => {
+    const createRes = await router.handle(Channels.spacesCreate.name, {
+      name: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5
+    });
+    const spaceId = (createRes as { ok: true; data: { id: string } }).data.id;
+
+    const getNoRuns = await router.handle(Channels.spacesGet.name, { id: spaceId });
+    if (getNoRuns.ok) expect((getNoRuns.data as { latestPdfPath?: string }).latestPdfPath).toBeUndefined();
+
+    // An older run has a PDF, but a newer run (no PDF yet) should win.
+    repos.runs.create({
+      id: randomUUID(), spaceId, problem: 'p1', status: RunStatus.Completed, roundsUsed: 1, startedAt: 1000, finishedAt: 1001
+    });
+    repos.runs.setPdfPath(repos.runs.listBySpace(spaceId)[0].id, '/reports/old.pdf');
+
+    repos.runs.create({
+      id: randomUUID(), spaceId, problem: 'p2', status: RunStatus.Completed, roundsUsed: 1, startedAt: 2000, finishedAt: 2001
+    });
+
+    const getNewerNoPdf = await router.handle(Channels.spacesGet.name, { id: spaceId });
+    if (getNewerNoPdf.ok) expect((getNewerNoPdf.data as { latestPdfPath?: string }).latestPdfPath).toBeUndefined();
+
+    repos.runs.setPdfPath(repos.runs.listBySpace(spaceId)[0].id, '/reports/new.pdf');
+
+    const getNewerWithPdf = await router.handle(Channels.spacesGet.name, { id: spaceId });
+    if (getNewerWithPdf.ok) expect((getNewerWithPdf.data as { latestPdfPath?: string }).latestPdfPath).toBe('/reports/new.pdf');
+
+    const listRes = await router.handle(Channels.spacesList.name, {});
+    if (listRes.ok) expect((listRes.data as { latestPdfPath?: string }[])[0].latestPdfPath).toBe('/reports/new.pdf');
+  });
+
   it('blocks delete/unpublish of a Space with an active run, surfaced as a plain error envelope', async () => {
     const spaceRes = await router.handle(Channels.spacesCreate.name, {
       name: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5
@@ -251,18 +282,37 @@ describe('ipcRouter', () => {
     expect(startRunCalls).toEqual([{ spaceId: 's1', problem: 'q' }]);
   });
 
-  it('runs:openPdf delegates to shell and surfaces errors', async () => {
-    const successRes = await router.handle(Channels.runsOpenPdf.name, { path: '/tmp/ok.pdf' });
+  it('runs:openPdf delegates to shell and surfaces errors, for a file that actually exists', async () => {
+    const okPath = join(settingsDir, 'ok.pdf');
+    const errorPath = join(settingsDir, 'error.pdf');
+    writeFileSync(okPath, 'fake pdf bytes');
+    writeFileSync(errorPath, 'fake pdf bytes');
+
+    const successRes = await router.handle(Channels.runsOpenPdf.name, { path: okPath });
     expect(successRes.ok).toBe(true);
-    
-    const errRes = await router.handle(Channels.runsOpenPdf.name, { path: '/tmp/error.pdf' });
+
+    const errRes = await router.handle(Channels.runsOpenPdf.name, { path: errorPath });
     expect(errRes.ok).toBe(false);
     if (!errRes.ok) expect(errRes.error.message).toBe('failed to open');
   });
 
-  it('runs:showInFolder delegates to shell', async () => {
-    const res = await router.handle(Channels.runsShowInFolder.name, { path: '/tmp/ok.pdf' });
+  it('runs:openPdf rejects with a clear message when the file genuinely does not exist', async () => {
+    const res = await router.handle(Channels.runsOpenPdf.name, { path: join(settingsDir, 'never-written.pdf') });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.message).toMatch(/no longer exists|still generating/i);
+  });
+
+  it('runs:showInFolder delegates to shell, for a file that actually exists', async () => {
+    const okPath = join(settingsDir, 'ok2.pdf');
+    writeFileSync(okPath, 'fake pdf bytes');
+    const res = await router.handle(Channels.runsShowInFolder.name, { path: okPath });
     expect(res.ok).toBe(true);
+  });
+
+  it('runs:showInFolder rejects with a clear message when the file genuinely does not exist', async () => {
+    const res = await router.handle(Channels.runsShowInFolder.name, { path: join(settingsDir, 'never-written2.pdf') });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.message).toMatch(/no longer exists|still generating/i);
   });
 
   it('gets and updates settings', async () => {

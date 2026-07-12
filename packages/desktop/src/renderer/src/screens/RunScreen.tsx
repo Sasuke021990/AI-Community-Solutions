@@ -100,6 +100,7 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
     setRun(null);
     runIdRef.current = null;
     setConfirmStop(false);
+    setIsGeneratingPdf(false);
     streamingRef.current = new Map();
     setStreamingVersion(0);
     setResetScroll((v) => !v); // toggle to trigger effect in RunFeed
@@ -127,6 +128,7 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
       runIdRef.current = runId;
       seenEventIds.current = new Set();
       setEvents([]);
+      setIsGeneratingPdf(false);
       setProblem('');
       const r = await call(window.acs.runs.get(runId));
       setRun(r);
@@ -157,6 +159,7 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
     setRun(null);
     setError(null);
     setConfirmStop(false);
+    setIsGeneratingPdf(false);
     streamingRef.current = new Map();
     setStreamingVersion(0);
     setResetScroll((v) => !v);

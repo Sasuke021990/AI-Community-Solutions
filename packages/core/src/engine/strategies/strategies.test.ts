@@ -231,9 +231,8 @@ describe('OrchestratorStrategy', () => {
     const r1 = await strat.executeRound(state);
     expect(r1.finalAnswer).toBeUndefined();
     expect(r1.halt).toBeUndefined();
-    expect(state.messages[state.messages.length - 1].content).toContain(
-      'You provided a final answer without ever delegating to a worker'
-    );
+    expect(state.messages[state.messages.length - 1].content).toContain('Researcher');
+    expect(state.messages[state.messages.length - 1].content).toContain('not been consulted yet');
 
     // Round 2: still refuses to delegate -> halts (same safety net as the
     // no-progress guard), rather than looping until maxRounds/timeout.
@@ -266,6 +265,47 @@ describe('OrchestratorStrategy', () => {
 
     const r2 = await strat.executeRound(state);
     expect(r2.finalAnswer).toBe('done after delegating'); // round 2: now accepted
+  });
+
+  it('rejects a final answer until EVERY worker has been consulted, not just one', async () => {
+    // Regression test for a real reported run: the orchestrator delegated to
+    // one hat repeatedly but tried to wrap up before consulting the rest.
+    const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
+    const w1 = agent({ id: 'w1', name: 'White' });
+    const w2 = agent({ id: 'w2', name: 'Black' });
+    const state = makeState({ agents: [orchestrator, w1, w2] });
+
+    let call = 0;
+    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
+      const sys = req.messages[0].content;
+      if (sys.includes('orchestrator')) {
+        call++;
+        if (call === 1) {
+          // Delegates to White only, then tries to answer without Black.
+          return { message: { role: 'assistant', content: '<task agent="White">facts</task>' } };
+        }
+        if (call === 2) {
+          return { message: { role: 'assistant', content: '<final_answer>done without Black</final_answer>' } };
+        }
+        // Nudged - now delegates to the remaining worker.
+        return { message: { role: 'assistant', content: '<task agent="Black">risks</task>' } };
+      }
+      return { message: { role: 'assistant', content: 'worker output' } };
+    });
+
+    const strat = new OrchestratorStrategy();
+    const r1 = await strat.executeRound(state); // delegates to White
+    expect(r1.finalAnswer).toBeUndefined();
+
+    const r2 = await strat.executeRound(state); // tries to answer - rejected, Black not consulted
+    expect(r2.finalAnswer).toBeUndefined();
+    expect(r2.halt).toBeUndefined();
+    expect(state.messages[state.messages.length - 1].content).toContain('Black');
+    expect(state.messages[state.messages.length - 1].content).toContain('not been consulted yet');
+
+    const r3 = await strat.executeRound(state); // now delegates to Black
+    expect(r3.finalAnswer).toBeUndefined();
+    expect(state.messages.filter((m) => m.content.startsWith('WORKER Black')).length).toBe(1);
   });
 
   it('does not require delegation when the orchestrator has no workers', async () => {
