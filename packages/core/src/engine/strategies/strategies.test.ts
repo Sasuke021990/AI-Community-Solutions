@@ -320,6 +320,39 @@ describe('OrchestratorStrategy', () => {
     const r1 = await strat.executeRound(state);
     expect(r1.finalAnswer).toBe('solo answer'); // accepted immediately - nothing to delegate to
   });
+
+  it('halts when a failing model makes every delegated worker return empty content', async () => {
+    // Regression test for a real reported run: the orchestrator delegated
+    // every round, but the model returned empty completions for all workers,
+    // so the run looped to maxRounds producing nothing. This must halt fast.
+    const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
+    const worker = agent({ id: 'w1', name: 'Researcher' });
+    const state = makeState({ agents: [orchestrator, worker] });
+
+    let orchTurn = 0;
+    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
+      const sys = req.messages[0].content;
+      if (sys.includes('orchestrator')) {
+        orchTurn++;
+        // Vary the delegation each round so this isn't caught by the
+        // duplicate-output guard - the empty-worker path must be what halts.
+        return { message: { role: 'assistant', content: `<task agent="Researcher">do research step ${orchTurn}</task>` } };
+      }
+      return { message: { role: 'assistant', content: '' } }; // worker returns nothing (model failing)
+    });
+
+    const strat = new OrchestratorStrategy();
+
+    // Round 1: delegates, worker returns empty -> 1st no-progress.
+    const r1 = await strat.executeRound(state);
+    expect(r1.halt).toBeUndefined();
+
+    // Round 2: delegates again (different text), worker still empty -> halt.
+    const r2 = await strat.executeRound(state);
+    expect(r2.halt).toBe(true);
+    const events = (state as unknown as { _events: EngineEvent[] })._events;
+    expect(events.some((e) => e.type === RunEventType.System && (e.payload.note as string).includes('no content'))).toBe(true);
+  });
 });
 
 describe('DebateStrategy', () => {

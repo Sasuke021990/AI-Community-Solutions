@@ -93,8 +93,6 @@ export class OrchestratorStrategy implements AgentStrategy {
       return {};
     }
 
-    this.noProgressStreak = 0;
-
     // Dispatch independent subtasks to workers concurrently.
     const results = await Promise.all(
       tasks.map(async ({ agentName, task }) => {
@@ -111,6 +109,27 @@ export class OrchestratorStrategy implements AgentStrategy {
     for (const r of results) {
       if (r.workerId) this.delegatedWorkerIds.add(r.workerId);
       state.messages.push({ role: 'assistant', content: `WORKER ${r.name}: ${r.content}` });
+    }
+
+    // A round where the orchestrator delegated but EVERY dispatched worker
+    // returned empty content is not real progress - it's a sign the model is
+    // failing (returning empty completions). Count it toward the no-progress
+    // streak instead of resetting, so a broken model halts in a couple of
+    // rounds rather than looping to maxRounds producing nothing.
+    const anyRealContent = results.some((r) => r.workerId && r.content.trim().length > 0);
+    if (anyRealContent) {
+      this.noProgressStreak = 0;
+    } else {
+      this.noProgressStreak++;
+      if (this.noProgressStreak >= 2) {
+        state.onEvent({
+          type: RunEventType.System,
+          payload: {
+            note: 'Delegated workers returned no content across rounds (the model may be failing or overloaded); synthesizing a best-effort answer.'
+          }
+        });
+        return { halt: true };
+      }
     }
 
     return {};
