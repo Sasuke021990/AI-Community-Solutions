@@ -18,6 +18,7 @@ describe('SettingsStore', () => {
     expect(store.get().concurrencyCap).toBe(2);
     expect(store.get().firstTokenTimeoutSec).toBe(120);
     expect(store.get().interTokenTimeoutSec).toBe(60);
+    expect(store.get().narrativeModel).toBe('None (Raw Transcript)');
   });
 
   it('merges caller-supplied defaults', () => {

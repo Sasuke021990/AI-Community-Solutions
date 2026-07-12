@@ -9,6 +9,8 @@ export interface Settings {
   firstTokenTimeoutSec: number;
   /** Max silence between tokens once generation has actually started (seconds). */
   interTokenTimeoutSec: number;
+  /** Model used for generating the final narrative summary. */
+  narrativeModel: string;
 }
 
 export type SettingsPatch = Partial<Settings>;
@@ -18,7 +20,8 @@ const DEFAULTS: Settings = {
   concurrencyCap: 2,
   reportsFolder: '',
   firstTokenTimeoutSec: 120,
-  interTokenTimeoutSec: 60
+  interTokenTimeoutSec: 60,
+  narrativeModel: 'None (Raw Transcript)'
 };
 
 /**

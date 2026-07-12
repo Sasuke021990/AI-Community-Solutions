@@ -84,7 +84,8 @@ app.whenReady().then(() => {
     () => concurrencyLimiter,
     broadcast,
     () => settingsStore.get().reportsFolder,
-    writeRunPdf
+    writeRunPdf,
+    () => settingsStore.get().narrativeModel
   );
 
   const router = createIpcRouter({

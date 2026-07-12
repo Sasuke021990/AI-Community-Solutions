@@ -42,7 +42,8 @@ describe('RunManager', () => {
     return new RunManager(repos, () => lmClient, () => new ConcurrencyLimiter(2), (channel, payload) =>
       broadcasts.push({ channel, payload }),
       () => '/tmp/reports',
-      writePdfMock
+      writePdfMock,
+      () => 'None (Raw Transcript)'
     );
   }
 

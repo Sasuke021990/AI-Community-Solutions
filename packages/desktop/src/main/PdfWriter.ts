@@ -34,17 +34,19 @@ export async function mergePdfBuffers(buffers: Buffer[]): Promise<Buffer> {
   return Buffer.from(await merged.save());
 }
 
-export async function writeRunPdf(report: RunReportHtml, outPath: string, spaceName: string, dateStr: string): Promise<void> {
+export async function writeRunPdf(report: RunReportHtml, outPath: string, problem: string, dateStr: string): Promise<void> {
   await mkdir(dirname(outPath), { recursive: true });
 
   const coverBytes = await printHtml(report.coverHtml, {});   // no header/footer at all
 
+  const shortProblem = problem.length > 70 ? problem.substring(0, 67) + '...' : problem;
+
   const headerTemplate =
     '<div style="font-size:8px;width:100%;margin:0 12mm;padding:6px 0 4px;display:flex;' +
-    'justify-content:space-between;color:#64748b;border-bottom:1px solid #cbd5e1;">' +
-    `<span>${escapeHtml(spaceName)}</span><span>${escapeHtml(dateStr)}</span></div>`;
+    'justify-content:space-between;color:#5b6b7f;border-bottom:1px solid #1e3a5f;">' +
+    `<span>${escapeHtml(shortProblem)}</span><span>${escapeHtml(dateStr)}</span></div>`;
   const footerTemplate =
-    '<div style="font-size:8px;width:100%;padding:0 12mm;display:flex;justify-content:space-between;color:#64748b;">' +
+    '<div style="font-size:8px;width:100%;padding:0 12mm;display:flex;justify-content:space-between;color:#5b6b7f;">' +
     '<span>AI Community Solutions</span>' +
     '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>';
   const bodyBytes = await printHtml(report.bodyHtml, { header: headerTemplate, footer: footerTemplate });

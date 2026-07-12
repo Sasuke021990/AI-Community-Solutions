@@ -36,3 +36,4 @@ export * from './markdown/renderSafeMarkdown.js';
 
 // Report
 export * from './report/ReportRenderer.js';
+export * from './report/NarrativeGenerator.js';

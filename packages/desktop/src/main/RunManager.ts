@@ -10,9 +10,10 @@ import {
   RunEventType,
   PersistedRunEvent,
   RunReportHtml,
-  renderRunReport
+  renderRunReport,
+  generateNarrative
 } from '@acs/core';
-import { RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL, RUN_TOKEN_PUSH_CHANNEL } from '../shared/ipc.js';
+import { RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL, RUN_TOKEN_PUSH_CHANNEL, RUN_REPORT_GENERATION_CHANNEL } from '../shared/ipc.js';
 import { join } from 'path';
 
 export type Broadcast = (channel: string, payload: unknown) => void;
@@ -36,7 +37,8 @@ export class RunManager {
     private getConcurrencyLimiter: () => ConcurrencyLimiter,
     private broadcast: Broadcast,
     private getReportsFolder: () => string,
-    private writePdf: (report: RunReportHtml, outPath: string, spaceName: string, dateStr: string) => Promise<void>
+    private writePdf: (report: RunReportHtml, outPath: string, spaceName: string, dateStr: string) => Promise<void>,
+    private getNarrativeModel: () => string
   ) {}
 
   public async startRun(spaceId: string, problem: string): Promise<StartRunResult> {
@@ -93,13 +95,21 @@ export class RunManager {
         const finalRun = this.repos.runs.get(run.id);
         if (finalRun) {
           try {
+            this.broadcast(RUN_REPORT_GENERATION_CHANNEL, { runId: finalRun.id, isGenerating: true });
             const space = this.repos.spaces.get(finalRun.spaceId)!;
             const agents = this.repos.agents.listBySpace(finalRun.spaceId);
             const events = this.repos.runEvents.listByRun(finalRun.id);
-            const report = renderRunReport({ run: finalRun, space, agents, events });
+            
+            let narrative;
+            const narrativeModel = this.getNarrativeModel();
+            if (narrativeModel !== 'None (Raw Transcript)') {
+              narrative = await generateNarrative({ run: finalRun, space, agents, events }, this.getLmStudioClient(), narrativeModel);
+            }
+
+            const report = renderRunReport({ run: finalRun, space, agents, events, narrative });
             const file = join(this.getReportsFolder(), buildPdfFilename(space.name, finalRun));
             const dateStr = new Date(finalRun.finishedAt ?? Date.now()).toLocaleString();
-            await this.writePdf(report, file, space.name, dateStr);
+            await this.writePdf(report, file, finalRun.problem, dateStr);
             this.repos.runs.setPdfPath(finalRun.id, file);
           } catch (e) {
             // Log only - a PDF failure must never turn a finished run into a failure.
@@ -113,6 +123,8 @@ export class RunManager {
               at: Date.now()
             });
             this.broadcast(RUN_EVENT_PUSH_CHANNEL, event);
+          } finally {
+            this.broadcast(RUN_REPORT_GENERATION_CHANNEL, { runId: finalRun.id, isGenerating: false });
           }
         }
         this.broadcast(RUN_STATUS_PUSH_CHANNEL, this.repos.runs.get(run.id));

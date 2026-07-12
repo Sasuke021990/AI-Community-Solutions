@@ -7,10 +7,12 @@ interface SettingsForm {
   reportsFolder: string;
   firstTokenTimeoutSec: number;
   interTokenTimeoutSec: number;
+  narrativeModel: string;
 }
 
 export function SettingsScreen() {
   const [form, setForm] = useState<SettingsForm | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -20,6 +22,9 @@ export function SettingsScreen() {
     call(window.acs.settings.get())
       .then(setForm)
       .catch((e: Error) => setError(e.message));
+    call(window.acs.models.list())
+      .then(res => setAvailableModels(res.models))
+      .catch(() => {});
   }, []);
 
   async function save() {
@@ -128,6 +133,25 @@ export function SettingsScreen() {
             value={form.reportsFolder}
             onChange={(e) => setForm({ ...form, reportsFolder: e.target.value })}
           />
+        </div>
+
+        <div className="field">
+          <label>Narrative Summary Model</label>
+          <select
+            value={form.narrativeModel}
+            onChange={(e) => setForm({ ...form, narrativeModel: e.target.value })}
+          >
+            <option value="None (Raw Transcript)">None (Raw Transcript)</option>
+            {availableModels.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+            {!availableModels.includes(form.narrativeModel) && form.narrativeModel !== 'None (Raw Transcript)' && (
+              <option value={form.narrativeModel}>{form.narrativeModel} (Offline)</option>
+            )}
+          </select>
+          <div className="field-hint">
+            Model used to generate a narrative summary of the report. Set to &quot;None&quot; to skip LLM summarization.
+          </div>
         </div>
 
         <div className="row">

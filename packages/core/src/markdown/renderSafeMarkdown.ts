@@ -40,6 +40,10 @@ export function renderSafeMarkdown(input: string): string {
   html = html.replace(/^[-*] (.*)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
 
+  // Blockquotes
+  html = html.replace(/^&gt; (.*)$/gm, '<blockquote>$1</blockquote>');
+  html = html.replace(/(<blockquote>.*<\/blockquote>\n?)+/g, (m) => `<blockquote>${m.replace(/<\/blockquote>\n?<blockquote>/g, '<br/>').replace(/<\/?blockquote>/g, '')}</blockquote>`);
+
   // Wrap remaining bare lines/blocks into paragraphs, leaving block-level
   // elements we already produced untouched.
   html = html
@@ -47,7 +51,7 @@ export function renderSafeMarkdown(input: string): string {
     .map((block) => {
       const trimmed = block.trim();
       if (trimmed === '') return '';
-      if (/^<(h1|h2|h3|ul|pre)/.test(trimmed)) return trimmed;
+      if (/^<(h1|h2|h3|ul|pre|blockquote)/.test(trimmed)) return trimmed;
       return `<p>${trimmed.replace(/\n/g, '<br/>')}</p>`;
     })
     .filter(Boolean)

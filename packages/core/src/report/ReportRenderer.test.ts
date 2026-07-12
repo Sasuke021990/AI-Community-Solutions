@@ -22,9 +22,8 @@ describe('ReportRenderer', () => {
     const html = renderRunReport({ run, space, agents, events });
     
     // Cover
-    expect(html.coverHtml).toContain('Test Space');
+    expect(html.coverHtml).not.toContain('Test Space');
     expect(html.coverHtml).toContain('Find the cat');
-    expect(html.coverHtml).not.toContain('Status:'); // Completed runs don't show status
 
     // Body
     expect(html.bodyHtml).toContain('<h2>Final Answer</h2>');
@@ -48,7 +47,7 @@ describe('ReportRenderer', () => {
     const run: Run = { id: 'r1', spaceId: 's1', problem: 'Q', status: RunStatus.Failed, roundsUsed: 1, startedAt: 1000, error: 'OOM Error' };
     const html = renderRunReport({ run, space, agents, events: [] });
     
-    expect(html.coverHtml).toContain('Status: failed');
+    expect(html.coverHtml).not.toContain('Status: failed');
     expect(html.bodyHtml).toContain('Run failed:');
     expect(html.bodyHtml).toContain('OOM Error');
     expect(html.bodyHtml).not.toContain('<h2>Final Answer</h2>');
@@ -58,8 +57,32 @@ describe('ReportRenderer', () => {
     const run: Run = { id: 'r1', spaceId: 's1', problem: 'Q', status: RunStatus.Stopped, roundsUsed: 1, startedAt: 1000 };
     const html = renderRunReport({ run, space, agents, events: [] });
     
-    expect(html.coverHtml).toContain('Status: stopped');
+    expect(html.coverHtml).not.toContain('Status: stopped');
     expect(html.bodyHtml).toContain('Stopped early');
     expect(html.bodyHtml).not.toContain('<h2>Final Answer</h2>');
+  });
+
+  it('renders narrative and key points when provided', () => {
+    const run: Run = { id: 'r1', spaceId: 's1', problem: 'Find the cat', status: RunStatus.Completed, roundsUsed: 1, startedAt: 1000, finalAnswer: '**Found it**' };
+    const html = renderRunReport({ 
+      run, space, agents, events: [],
+      narrative: {
+        keyPoints: ['Looked hard', 'Found cat'],
+        narrativeMarkdown: 'The detective said <quote agent="Detective">I am on it.</quote>'
+      }
+    });
+
+    // Key points
+    expect(html.bodyHtml).toContain('<h3>Key Points</h3>');
+    expect(html.bodyHtml).toContain('Looked hard');
+    
+    // Final Answer
+    expect(html.bodyHtml).toContain('<strong>Found it</strong>');
+    
+    // Narrative replaces cards
+    expect(html.bodyHtml).toContain('<div class="narrative-body"');
+    expect(html.bodyHtml).toContain('— Detective');
+    expect(html.bodyHtml).toContain('<blockquote>'); // from markdown rendering of '> "I am on it."'
+    expect(html.bodyHtml).not.toContain('class="card"');
   });
 });

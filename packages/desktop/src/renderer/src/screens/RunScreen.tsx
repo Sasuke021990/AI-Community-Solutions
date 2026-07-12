@@ -22,6 +22,7 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
   const [confirmStop, setConfirmStop] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const confirmStopBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -89,6 +90,9 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
         }, 50);
       }
     });
+    const unsubReport = window.acs.runs.onReportGeneration(({ runId, isGenerating }) => {
+      if (runId === runIdRef.current) setIsGeneratingPdf(isGenerating);
+    });
 
     setLoading(true);
     seenEventIds.current = new Set();
@@ -105,6 +109,7 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
       unsubEvent();
       unsubStatus();
       unsubToken();
+      unsubReport();
     };
   }, [spaceId]);
 
@@ -261,14 +266,23 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
             </div>
           )}
 
-          {run.status !== 'running' && run.pdfPath && (
-            <div style={{ marginTop: 16 }}>
-              <div className="section-title" style={{ marginTop: 0, marginBottom: 8 }}>
-                Report (PDF)
-              </div>
-              <div className="row">
-                <button className="btn" onClick={() => call(window.acs.runs.openPdf(run.pdfPath!))}>Open PDF</button>
-                <button className="btn" onClick={() => call(window.acs.runs.showPdfInFolder(run.pdfPath!))}>Show in folder</button>
+          {isGeneratingPdf && (
+            <div className="banner banner-info" style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+              Generating PDF Report (with summary)...
+            </div>
+          )}
+
+          {run.status !== 'running' && run.pdfPath && !isGeneratingPdf && (
+            <div className="row" style={{ marginTop: 24, padding: 16, background: '#f8fafc', borderRadius: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div className="section-title" style={{ marginTop: 0, marginBottom: 8 }}>
+                  Report (PDF)
+                </div>
+                <div className="row">
+                  <button className="btn" onClick={() => call(window.acs.runs.openPdf(run.pdfPath!))}>Open PDF</button>
+                  <button className="btn" onClick={() => call(window.acs.runs.showPdfInFolder(run.pdfPath!))}>Show in folder</button>
+                </div>
               </div>
             </div>
           )}

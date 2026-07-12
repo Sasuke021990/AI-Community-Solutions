@@ -19,6 +19,8 @@ export const RUN_EVENT_PUSH_CHANNEL = 'runs:event';
 export const RUN_STATUS_PUSH_CHANNEL = 'runs:status';
 /** Token-level streaming channel — never persisted, high-frequency, ephemeral. */
 export const RUN_TOKEN_PUSH_CHANNEL = 'runs:token';
+/** Broadcast when report generation starts and finishes. */
+export const RUN_REPORT_GENERATION_CHANNEL = 'runs:report-generation';
 
 
 export interface IpcError {
