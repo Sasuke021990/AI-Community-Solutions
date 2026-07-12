@@ -79,17 +79,15 @@ export function renderRunReport(input: RunReportInput): RunReportHtml {
   for (const ev of events) {
     if (ev.type === RunEventType.RoundStart) {
       if (inCard) bodyHtml += `</div>`;
-      const payload = ev.payload as { agentId?: string };
-      const agentId = payload.agentId;
-      const agent = agents.find(a => a.id === agentId);
+      const agent = agents.find(a => a.id === ev.agentId);
       const role = agent ? agent.role : 'Unknown Agent';
       const isManager = agent?.isOrchestrator;
       bodyHtml += `<div class="card"><div class="card-header">${escapeHtml(role)}${isManager ? '<span class="manager-tag">Manager</span>' : ''}</div>`;
       inCard = true;
     } else if (ev.type === RunEventType.AgentMessage) {
       if (!inCard) { bodyHtml += `<div class="card">`; inCard = true; }
-      const payload = ev.payload as { text?: string };
-      bodyHtml += `<div class="agent-body">${renderSafeMarkdown(payload.text || '')}</div>`;
+      const payload = ev.payload as { message?: { content?: string } };
+      bodyHtml += `<div class="agent-body">${renderSafeMarkdown(payload.message?.content || '')}</div>`;
     } else if (ev.type === RunEventType.ToolCall) {
       if (!inCard) { bodyHtml += `<div class="card">`; inCard = true; }
       const payload = ev.payload as { toolCall?: { function?: { name: string; arguments: string } } };
@@ -99,8 +97,8 @@ export function renderRunReport(input: RunReportInput): RunReportHtml {
       }
     } else if (ev.type === RunEventType.System) {
       if (inCard) { bodyHtml += `</div>`; inCard = false; }
-      const payload = ev.payload as { text?: string };
-      const text = payload.text || '';
+      const payload = ev.payload as { note?: string };
+      const text = payload.note || '';
       if (text) {
         bodyHtml += `<div class="system-note">${escapeHtml(text)}</div>`;
       }

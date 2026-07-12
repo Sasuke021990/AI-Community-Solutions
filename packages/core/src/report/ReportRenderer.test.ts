@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { renderRunReport } from './ReportRenderer.js';
-import { RunStatus, RunEventType } from '../domain/enums.js';
+import { RunStatus, RunEventType, Strategy, SpaceStatus } from '../domain/enums.js';
 import { Run, Space, Agent, RunEvent } from '../domain/types.js';
 
 describe('ReportRenderer', () => {
-  const space: Space = { id: 's1', name: 'Test Space', description: '', strategy: 'round-robin', defaultModel: 'm', maxRounds: 5, status: 'published', createdAt: 0, updatedAt: 0 };
+  const space: Space = { id: 's1', name: 'Test Space', description: '', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5, status: SpaceStatus.Published, createdAt: 0, updatedAt: 0 };
   const agents: Agent[] = [
     { id: 'a1', spaceId: 's1', name: 'Agent 1', role: 'Detective', systemPrompt: '', position: 1, isOrchestrator: false },
     { id: 'a2', spaceId: 's1', name: 'Boss', role: 'Chief', systemPrompt: '', position: 0, isOrchestrator: true }
@@ -13,10 +13,10 @@ describe('ReportRenderer', () => {
   it('renders a completed run with cover and body correctly', () => {
     const run: Run = { id: 'r1', spaceId: 's1', problem: 'Find the cat', status: RunStatus.Completed, roundsUsed: 1, startedAt: 1000, finalAnswer: '**Found it**' };
     const events: RunEvent[] = [
-      { id: 'e1', runId: 'r1', type: RunEventType.RoundStart, payload: { agentId: 'a2', round: 1 }, at: 1010, seq: 1 },
-      { id: 'e2', runId: 'r1', type: RunEventType.AgentMessage, payload: { text: 'I am assigning tasks.' }, at: 1020, seq: 2 },
-      { id: 'e3', runId: 'r1', type: RunEventType.ToolCall, payload: { toolCall: { function: { name: 'search', arguments: '{"q":"cat"}' } } }, at: 1030, seq: 3 },
-      { id: 'e4', runId: 'r1', type: RunEventType.System, payload: { text: 'System intervened' }, at: 1040, seq: 4 }
+      { id: 'e1', runId: 'r1', type: RunEventType.RoundStart, agentId: 'a2', payload: { model: 'm' }, at: 1010, seq: 1 },
+      { id: 'e2', runId: 'r1', type: RunEventType.AgentMessage, agentId: 'a2', payload: { message: { role: 'assistant', content: 'I am assigning tasks.' } }, at: 1020, seq: 2 },
+      { id: 'e3', runId: 'r1', type: RunEventType.ToolCall, agentId: 'a2', payload: { toolCall: { id: 't1', type: 'function', function: { name: 'search', arguments: '{"q":"cat"}' } } }, at: 1030, seq: 3 },
+      { id: 'e4', runId: 'r1', type: RunEventType.System, payload: { note: 'System intervened' }, at: 1040, seq: 4 }
     ];
 
     const html = renderRunReport({ run, space, agents, events });
