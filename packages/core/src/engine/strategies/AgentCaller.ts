@@ -16,6 +16,35 @@ const COLLAB_INSTRUCTIONS =
 const MAX_TOOL_ITERATIONS = 5;
 const FREQUENCY_PENALTY = 0.3;
 
+export const TURN_OUTPUT_SCHEMA = {
+  type: 'json_schema' as const,
+  json_schema: {
+    name: 'agent_turn',
+    schema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', description: 'Your full contribution for this turn.' },
+        keyPoints: { type: 'array', items: { type: 'string' }, description: 'Optional: 1-5 short highlights of this contribution.' }
+      },
+      required: ['content']
+    },
+    strict: true
+  }
+};
+
+export interface ParsedTurn { content: string; keyPoints?: string[] }
+
+export function parseTurnOutput(raw: string): ParsedTurn | undefined {
+  try {
+    const obj = JSON.parse(raw);
+    if (typeof obj?.content !== 'string' || !obj.content.trim()) return undefined;
+    const keyPoints = Array.isArray(obj.keyPoints) ? obj.keyPoints.filter((k: unknown) => typeof k === 'string') : undefined;
+    return { content: obj.content, keyPoints: keyPoints?.length ? keyPoints : undefined };
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Builds the message list for an agent turn: identity + role prompt +
  * collaboration + context. Identity is injected here at run time - role
@@ -70,7 +99,8 @@ export async function callAgent(
             messages: working,
             tools: state.tools.length > 0 ? state.tools : undefined,
             temperature: state.temperature,
-            frequency_penalty: FREQUENCY_PENALTY
+            frequency_penalty: FREQUENCY_PENALTY,
+            response_format: TURN_OUTPUT_SCHEMA
           },
           (token) => state.onToken?.(agent.id, token),
           state.signal
@@ -79,12 +109,46 @@ export async function callAgent(
     );
 
     const msg = response.message;
-    state.onEvent({ type: RunEventType.AgentMessage, agentId: agent.id, payload: { message: msg } });
-    working.push(msg);
 
     if (!msg.tool_calls || msg.tool_calls.length === 0 || iterations >= MAX_TOOL_ITERATIONS) {
-      return msg;
+      let parsed = parseTurnOutput(msg.content);
+      if (!parsed) {
+        // The first response is already a real, usable answer - it just
+        // didn't parse as the requested schema. A retry is a bonus
+        // reliability improvement, not something that should be able to
+        // discard a working response: if the retry call itself throws
+        // (network error, timeout, abort), fall back to msg.content
+        // rather than losing this turn's content entirely.
+        try {
+          const retryMsgs = [...working, msg, {
+            role: 'user' as const,
+            content: 'Your response was not valid JSON matching the required schema {"content": string, "keyPoints"?: string[]}. Reply again in that exact JSON shape.'
+          }];
+          const retryResp = await state.concurrencyLimiter.run(
+            () => state.lmStudioClient.chat(
+              { model, messages: retryMsgs, temperature: state.temperature, frequency_penalty: FREQUENCY_PENALTY, response_format: TURN_OUTPUT_SCHEMA },
+              () => {}, state.signal
+            ), state.signal
+          );
+          parsed = parseTurnOutput(retryResp.message.content);
+          if (!parsed) parsed = { content: (retryResp.message.content || msg.content).trim() };
+        } catch {
+          parsed = { content: msg.content.trim() };
+        }
+      }
+
+      const finalMsg: ChatMessage = { ...msg, content: parsed.content };
+      state.onEvent({
+        type: RunEventType.AgentMessage,
+        agentId: agent.id,
+        payload: { message: finalMsg, keyPoints: parsed.keyPoints }
+      });
+      working.push(finalMsg);
+      return finalMsg;
     }
+
+    state.onEvent({ type: RunEventType.AgentMessage, agentId: agent.id, payload: { message: msg } });
+    working.push(msg);
 
     for (const tc of msg.tool_calls) {
       state.onEvent({ type: RunEventType.ToolCall, agentId: agent.id, payload: { toolCall: tc } });

@@ -113,8 +113,16 @@ export function renderRunReport(input: RunReportInput): RunReportHtml {
       inCard = true;
     } else if (ev.type === RunEventType.AgentMessage) {
       if (!inCard) { bodyHtml += `<div class="card">`; inCard = true; }
-      const payload = ev.payload as { message?: { content?: string } };
+      const payload = ev.payload as { message?: { content?: string }, keyPoints?: string[] };
       bodyHtml += `<div class="agent-body">${renderSafeMarkdown(payload.message?.content || '')}</div>`;
+      if (payload.keyPoints && payload.keyPoints.length > 0) {
+        bodyHtml += `<div class="agent-keypoints" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #cbd5e1;">`;
+        bodyHtml += `<strong style="font-size: 10pt; color: #475569;">Key Points:</strong><ul style="margin: 4px 0 0 0; padding-left: 20px; color: #475569; font-size: 10pt;">`;
+        for (const kp of payload.keyPoints) {
+          bodyHtml += `<li>${renderSafeMarkdown(kp)}</li>`;
+        }
+        bodyHtml += `</ul></div>`;
+      }
     } else if (ev.type === RunEventType.ToolCall) {
       if (!inCard) { bodyHtml += `<div class="card">`; inCard = true; }
       const payload = ev.payload as { toolCall?: { function?: { name: string; arguments: string } } };

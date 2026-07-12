@@ -87,7 +87,7 @@ describe('Preset Workflows Dynamic Validation', () => {
             content = 'Worker result. WORKER';
           }
           
-          return { message: { role: 'assistant', content } };
+          return { message: { role: 'assistant', content: JSON.stringify({ content }) } };
         }),
         listModels: vi.fn().mockResolvedValue(['model1'])
       } as unknown as LmStudioClient;

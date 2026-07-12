@@ -1,5 +1,6 @@
 import { Run, Space, Agent, RunEvent, WebhookConfig } from '../domain/types.js';
-import { Strategy, RunStatus, RunEventType } from '../domain/enums.js';
+import { RunStatus, RunEventType, Strategy } from '../domain/enums.js';
+import { TURN_OUTPUT_SCHEMA, parseTurnOutput } from './strategies/AgentCaller.js';
 import { RunRepo, RunEventRepo } from '../db/repos/index.js';
 import { LmStudioClient, ConcurrencyLimiter, ChatMessage } from '../llm/index.js';
 import { McpClientWrapper } from '../mcp/McpClient.js';
@@ -268,6 +269,7 @@ export class RunOrchestrator {
   }
 
   /** Best-effort final answer produced from the transcript at the round cap. */
+
   private async synthesize(): Promise<string> {
     const messages: ChatMessage[] = [
       {
@@ -279,17 +281,20 @@ export class RunOrchestrator {
       { role: 'user', content: `Problem: ${this.state.run.problem}` },
       ...this.state.messages
     ];
-
     const res = await this.state.concurrencyLimiter.run(
       () =>
         this.state.lmStudioClient.chat(
-          { model: this.state.space.defaultModel, messages, temperature: this.state.temperature },
+          { model: this.state.space.defaultModel, messages, temperature: this.state.temperature, response_format: TURN_OUTPUT_SCHEMA },
           () => {},
           this.abortController.signal
         ),
       this.abortController.signal
     );
 
+    const parsed = parseTurnOutput(res.message.content);
+    if (parsed) return parsed.content.trim();
+
+    // Fallback if parsing failed
     const m = res.message.content.match(/<final_answer>([\s\S]*?)<\/final_answer>/);
     return (m ? m[1] : res.message.content).trim();
   }

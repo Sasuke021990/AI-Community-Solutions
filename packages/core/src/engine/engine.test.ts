@@ -333,13 +333,18 @@ describe('RunOrchestrator', () => {
     vi.spyOn(lmClient, 'chat').mockImplementation(async () => {
       call++;
       if (call === 1) {
-        return { message: { role: 'assistant', content: 'partial discussion...' } };
+        // Valid schema JSON, like a real response_format-honoring backend -
+        // must succeed on the first attempt so callAgent's own JSON retry
+        // doesn't silently consume the mock's "call 2" before the caller
+        // ever pushes this turn into state.messages (which is what
+        // hasPartial below depends on).
+        return { message: { role: 'assistant', content: JSON.stringify({ content: 'partial discussion...' }) } };
       }
       if (call === 2) {
         throw new Error('stall timeout: no tokens');
       }
       // synthesize safely happens
-      return { message: { role: 'assistant', content: 'salvaged answer' } };
+      return { message: { role: 'assistant', content: JSON.stringify({ content: 'salvaged answer' }) } };
     });
 
     const space = mkSpace({ strategy: Strategy.Orchestrator });

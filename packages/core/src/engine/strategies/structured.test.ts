@@ -20,7 +20,7 @@ function makeState(over: Partial<ExecutionState> = {}): ExecutionState {
   (state as unknown as { _events: EngineEvent[] })._events = events;
   return state;
 }
-const roleReply = (role: string) => `contribution from ${role}`;
+
 
 describe('StructuredStrategy — linear', () => {
   it('runs framer -> each worker once in order -> synthesizer, and returns the synthesis as the answer', async () => {
@@ -30,13 +30,16 @@ describe('StructuredStrategy — linear', () => {
     const state = makeState({ agents: [blue, white, black] });
 
     const callOrder: string[] = [];
-    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
+    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req) => {
       const sys = req.messages[0].content;
       const who = sys.includes('opening this session') ? 'frame'
         : sys.includes('Every perspective has now contributed') ? 'synth'
         : sys.match(/named "(\w+)"/)?.[1] ?? '?';
       callOrder.push(who);
-      return { message: { role: 'assistant', content: who === 'synth' ? 'THE FINAL ANSWER' : roleReply(who) } };
+      if (who === 'synth') {
+        return { message: { role: 'assistant', content: JSON.stringify({ content: '<final_answer>THE FINAL ANSWER</final_answer>' }) } };
+      }
+      return { message: { role: 'assistant', content: JSON.stringify({ content: `output from ${who}` }) } };
     });
 
     const shape: StructuredShape = {
@@ -55,7 +58,7 @@ describe('StructuredStrategy — linear', () => {
     const a2 = agent({ id: 'a2', name: 'A2', position: 2 });
     const state = makeState({ agents: [a1, a2] });
     vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
-      message: { role: 'assistant', content: '<final_answer>last word</final_answer>' }
+      message: { role: 'assistant', content: JSON.stringify({ content: '<final_answer>last word</final_answer>' }) }
     });
     const shape: StructuredShape = {
       cyclePhases: [{ name: 'Pipeline', kind: 'sequential', agents: [a1, a2], guidance: () => 'go' }]
@@ -70,13 +73,15 @@ describe('StructuredStrategy — linear', () => {
     let n = 0;
     vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async () => {
       n++;
-      return { message: { role: 'assistant', content: n <= 2 ? '' : 'ignored' } }; // both attempts empty
+      // Return invalid JSON (or empty) the first time so it retries,
+      // and invalid JSON the second time so it falls back to raw text.
+      return { message: { role: 'assistant', content: '' } };
     });
     const shape: StructuredShape = {
       cyclePhases: [{ name: 'P', kind: 'sequential', agents: [a1], guidance: () => 'go' }]
     };
     const r = await new StructuredStrategy(shape).executeRound(state);
-    expect(n).toBe(2); // one call + one retry
+    expect(n).toBe(4); // 1 call + 1 schema retry = 2. Then Strategy empty retry does it again -> 4.
     const events = (state as unknown as { _events: EngineEvent[] })._events;
     expect(events.some((e) => e.type === RunEventType.System && String(e.payload.note).includes('no contribution'))).toBe(true);
     expect(r.halt).toBe(true); // nothing usable -> salvage
@@ -99,7 +104,8 @@ describe('StructuredStrategy — cyclical & converging', () => {
     const state = makeState({ agents: [o, d], space: { ...makeState().space, maxRounds: 3 } });
     let calls = 0;
     vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async () => {
-      calls++; return { message: { role: 'assistant', content: `c${calls}` } };
+      calls++;
+      return { message: { role: 'assistant', content: JSON.stringify({ content: 'cycle output' }) } };
     });
     const shape: StructuredShape = {
       cyclePhases: [{ name: 'OODA', kind: 'sequential', agents: [o, d], guidance: () => 'go' }]
@@ -116,9 +122,9 @@ describe('StructuredStrategy — cyclical & converging', () => {
     let round = 0;
     vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
       const isCritique = req.messages.some((m) => typeof m.content === 'string' && m.content.includes('CRITIQUE_PHASE'));
-      if (isCritique) return { message: { role: 'assistant', content: '<no_objections/>' } }; // converge on 1st critique
+      if (isCritique) return { message: { role: 'assistant', content: JSON.stringify({ content: '<no_objections/>' }) } }; // converge on 1st critique
       round++;
-      return { message: { role: 'assistant', content: 'a proposal' } };
+      return { message: { role: 'assistant', content: JSON.stringify({ content: 'a proposal' }) } };
     });
 
     const NO_OBJ = /<no_objections\s*\/>/i;

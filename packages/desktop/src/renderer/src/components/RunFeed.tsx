@@ -18,6 +18,7 @@ interface RunFeedProps {
 interface ChatMessagePayload {
   role: string;
   content: string;
+  keyPoints?: string[];
   tool_calls?: { id: string; function: { name: string; arguments: string } }[];
 }
 
@@ -141,10 +142,21 @@ export function RunFeed({ events, agents, live, streamingByAgent, streamingVersi
                   {live && !item.turn!.message && !streaming && <span className="loading-dots">thinking</span>}
                 </div>
                 {item.turn!.message && (
-                  <div
-                    className="feed-turn-body"
-                    dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(item.turn!.message.content) }}
-                  />
+                  <>
+                    <div
+                      className="feed-turn-body"
+                      dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(item.turn!.message.content) }}
+                    />
+                    {item.turn!.message.keyPoints && item.turn!.message.keyPoints.length > 0 && (
+                      <div className="feed-turn-keypoints">
+                        <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 24, color: 'var(--text-secondary)' }}>
+                          {item.turn!.message.keyPoints.map((kp, idx) => (
+                            <li key={idx} dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(kp) }} />
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
                 )}
                 {streaming && !item.turn!.message && (
                   <div

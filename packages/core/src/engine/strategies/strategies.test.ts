@@ -103,6 +103,26 @@ describe('AgentCaller tool loop', () => {
     expect(msg.content).toBe('recovered');
     expect(callTool).not.toHaveBeenCalled();
   });
+
+  it('falls back to the original response when the JSON-schema retry call itself throws', async () => {
+    // The first response is real, usable text - it just isn't valid JSON.
+    // If the corrective retry then fails outright (network error, abort),
+    // that must NOT discard the perfectly good first response.
+    const state = makeState();
+    let call = 0;
+    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async () => {
+      call++;
+      if (call === 1) {
+        return { message: { role: 'assistant', content: 'a real, usable answer, just not JSON' } };
+      }
+      throw new Error('network error mid-retry');
+    });
+
+    const a = agent();
+    const msg = await callAgent(state, a, buildAgentMessages(a, state.run.problem, []));
+    expect(msg.content).toBe('a real, usable answer, just not JSON');
+    expect(call).toBe(2); // the retry was attempted
+  });
 });
 
 describe('parseTaskAssignments', () => {
@@ -165,8 +185,13 @@ describe('OrchestratorStrategy', () => {
     const researcher = agent({ id: 'w1', name: 'Researcher' });
     const state = makeState({ agents: [orchestrator, researcher] });
 
-    vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
-      message: { role: 'assistant', content: 'just narrating, no task blocks' }
+    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req) => {
+      return {
+        message: {
+          role: 'assistant',
+          content: JSON.stringify({ content: `Call #${req.messages.length}` })
+        }
+      };
     });
 
     const strat = new OrchestratorStrategy();
@@ -216,11 +241,8 @@ describe('OrchestratorStrategy', () => {
     const researcher = agent({ id: 'w1', name: 'Researcher' });
     const state = makeState({ agents: [orchestrator, researcher] });
 
-    // The orchestrator answers directly, using its own tools/reasoning,
-    // without ever emitting a <task> block - exactly the "only Blue ran"
-    // regression this guards against.
     vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
-      message: { role: 'assistant', content: '<final_answer>I solved it myself</final_answer>' }
+      message: { role: 'assistant', content: JSON.stringify({ content: '<final_answer>we decided to build an orchestrator</final_answer>', keyPoints: ['point 1'] }) }
     });
 
     const strat = new OrchestratorStrategy();
@@ -249,11 +271,19 @@ describe('OrchestratorStrategy', () => {
       if (sys.includes('orchestrator')) {
         call++;
         if (call === 1) {
-          return { message: { role: 'assistant', content: '<task agent="Researcher">dig</task>' } };
+          return { message: { role: 'assistant', content: JSON.stringify({ content: '<task agent="Researcher">dig</task>' }) } };
         }
-        return { message: { role: 'assistant', content: '<final_answer>done after delegating</final_answer>' } };
+        let content = '';
+        if (req.messages[req.messages.length - 1].content.includes('fail-json')) {
+          content = 'Not valid json';
+        } else if (req.messages[req.messages.length - 1].content.includes('Not valid JSON matching the required schema')) {
+          content = JSON.stringify({ content: 'I fixed it' });
+        } else {
+          content = JSON.stringify({ content: '<final_answer>done after delegating</final_answer>' });
+        }
+        return { message: { role: 'assistant', content } };
       }
-      return { message: { role: 'assistant', content: 'worker output' } };
+      return { message: { role: 'assistant', content: JSON.stringify({ content: 'worker output' }) } };
     });
 
     const strat = new OrchestratorStrategy();

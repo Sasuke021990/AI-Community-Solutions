@@ -283,8 +283,12 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
                   Report (PDF)
                 </div>
                 <div className="row">
+                  <button className="btn btn-primary" onClick={() => call(window.acs.runs.showPdfInFolder(run.pdfPath!))}>Show in folder</button>
                   <button className="btn" onClick={() => call(window.acs.runs.openPdf(run.pdfPath!))}>Open PDF</button>
-                  <button className="btn" onClick={() => call(window.acs.runs.showPdfInFolder(run.pdfPath!))}>Show in folder</button>
+                </div>
+                <div className="field-hint" style={{ marginTop: 6 }}>
+                  If "Open PDF" launches a browser tab showing an error, use "Show in folder" and open the file
+                  from Explorer instead — this depends on which app Windows opens PDFs with, not this app.
                 </div>
               </div>
             </div>
