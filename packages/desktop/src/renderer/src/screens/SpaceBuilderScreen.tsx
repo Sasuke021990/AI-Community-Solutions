@@ -69,9 +69,17 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  const agentsSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (confirmPublish) confirmBtnRef.current?.focus();
+    if (confirmPublish) {
+      // Wait for the confirm banner to mount, then bring it into view and focus
+      // it so Enter confirms - on a long/expanded form it can be off-screen.
+      requestAnimationFrame(() => {
+        confirmBtnRef.current?.scrollIntoView({ block: 'center' });
+        confirmBtnRef.current?.focus();
+      });
+    }
   }, [confirmPublish]);
 
   async function loadModels() {
@@ -167,6 +175,14 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
     try {
       await call(window.acs.spaces.update({ ...form, id: space.id }));
       await loadAll(space.id);
+      // Collapse the form back to its summary and move attention to the agents
+      // section, so saving details lands you where you continue working -
+      // consistent with how a freshly-created Space arrives collapsed.
+      setDetailsExpanded(false);
+      requestAnimationFrame(() => {
+        agentsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        agentsSectionRef.current?.focus();
+      });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -441,7 +457,11 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
 
       {space && (
         <>
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div
+            ref={agentsSectionRef}
+            tabIndex={-1}
+            style={{ justifyContent: 'space-between', alignItems: 'baseline', outline: 'none', display: 'flex' }}
+          >
             <div className="section-title" style={{ margin: '20px 0 8px' }}>
               Agents {sortedAgents.length > 8 && <span style={{ color: 'var(--warning)' }}>({sortedAgents.length} - consider fewer for local hardware)</span>}
             </div>
