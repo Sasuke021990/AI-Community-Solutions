@@ -26,6 +26,69 @@ describe('RunOrchestrator', () => {
     maxRounds: 5, status: SpaceStatus.Published, createdAt: 0, updatedAt: 0, ...over
   });
 
+  it('registers an enabled webhook as a callable tool and routes calls to it', async () => {
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'FRESH NEWS DATA' });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    let call = 0;
+    const seenTools: unknown[] = [];
+    vi.spyOn(lmClient, 'chat').mockImplementation(async (req) => {
+      call++;
+      seenTools.push(req.tools);
+      if (call === 1) {
+        return {
+          message: {
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              { id: 't1', type: 'function', function: { name: 'webhook__News', arguments: JSON.stringify({ query: 'ai' }) } }
+            ]
+          }
+        };
+      }
+      return { message: { role: 'assistant', content: '<final_answer>done</final_answer>' } };
+    });
+
+    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    const webhooks = [{
+      id: 'w1', name: 'News', description: 'Fetches news', method: 'GET' as const, url: 'http://example.com/news',
+      parameterized: true, enabled: true, createdAt: 0
+    }];
+
+    spaceRepo.create(space);
+    runRepo.create(run);
+
+    try {
+      const engine = new RunOrchestrator(run, space, agents, [], webhooks, runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+      await engine.start();
+
+      // The tool was actually offered to the model, correctly namespaced and shaped.
+      const offeredTools = seenTools[0] as { function: { name: string; parameters: { required?: string[] } } }[];
+      const webhookTool = offeredTools.find((t) => t.function.name === 'webhook__News');
+      expect(webhookTool).toBeDefined();
+      expect(webhookTool!.function.parameters.required).toEqual(['query']);
+
+      // The call was actually routed to the real HTTP fetch, with the query substituted.
+      expect(fetchSpy).toHaveBeenCalledWith('http://example.com/news?query=ai', expect.objectContaining({ method: 'GET' }));
+
+      // The fetched data reached the transcript as a tool result, and the run completed.
+      const events = eventRepo.listByRun('r1');
+      const toolResult = events.find((e) => e.type === 'tool_result');
+      expect((toolResult?.payload as { result: string }).result).toBe('FRESH NEWS DATA');
+
+      const updated = runRepo.get('r1');
+      expect(updated?.status).toBe(RunStatus.Completed);
+      expect(updated?.finalAnswer).toBe('done');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('runs to completion when final_answer is provided', async () => {
     const lmClient = new LmStudioClient();
     vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);

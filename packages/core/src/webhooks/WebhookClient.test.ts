@@ -59,6 +59,57 @@ describe('WebhookClient', () => {
     }));
   });
   
+  it('substitutes {query} in the URL for POST too, in addition to the JSON body', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => 'ok'
+    });
+
+    const w: WebhookConfig = {
+      id: '1', name: 'W', description: '', method: 'POST',
+      url: 'http://test.com/search/{query}', parameterized: true, enabled: true, createdAt: 0
+    };
+
+    await fetchWebhook(w, 'cats');
+    expect(global.fetch).toHaveBeenCalledWith('http://test.com/search/cats', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ query: 'cats' })
+    }));
+  });
+
+  it('minifies a JSON response before truncating', async () => {
+    const pretty = JSON.stringify({ a: 1, b: 'two', c: [1, 2, 3] }, null, 2);
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => pretty
+    });
+
+    const w: WebhookConfig = {
+      id: '1', name: 'W', description: '', method: 'GET', url: 'http://test.com/api', parameterized: false, enabled: true, createdAt: 0
+    };
+
+    const res = await fetchWebhook(w);
+    expect(res.body).toBe(JSON.stringify({ a: 1, b: 'two', c: [1, 2, 3] }));
+  });
+
+  it('leaves a non-JSON response (e.g. HTML) as raw text', async () => {
+    const html = '<html>\n  <body>hi</body>\n</html>';
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => html
+    });
+
+    const w: WebhookConfig = {
+      id: '1', name: 'W', description: '', method: 'GET', url: 'http://test.com/api', parameterized: false, enabled: true, createdAt: 0
+    };
+
+    const res = await fetchWebhook(w);
+    expect(res.body).toBe(html);
+  });
+
   it('truncates large responses', async () => {
     const hugeText = 'A'.repeat(10000);
     global.fetch = vi.fn().mockResolvedValue({

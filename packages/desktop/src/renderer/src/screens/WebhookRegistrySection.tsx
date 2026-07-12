@@ -167,7 +167,11 @@ export function WebhookRegistrySection() {
             <label>
               <input type="checkbox" checked={form.parameterized} onChange={(e) => setForm({ ...form, parameterized: e.target.checked })} /> Accepts query parameter?
             </label>
-            <div className="field-hint">If yes, agents can supply a search argument. (GET: appended as ?query= or replaces {'{query}'}, POST: JSON body {'{"query":"..."}'})</div>
+            <div className="field-hint">
+              If yes, agents can supply a search argument. A <code>{'{query}'}</code> placeholder anywhere in the URL
+              gets substituted (works for GET or POST); GET without a placeholder appends <code>?query=</code>; POST
+              always also sends it as JSON body <code>{'{"query":"..."}'}</code>.
+            </div>
           </div>
           <div className="field">
             <label>Headers (one Header: Value per line)</label>

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
@@ -68,6 +68,83 @@ describe('ipcRouter', () => {
     const list = await router.handle(Channels.mcpList.name, {});
     expect(list.ok).toBe(true);
     if (list.ok) expect((list.data as unknown[]).length).toBe(1);
+  });
+
+  it('creates, lists, updates, and deletes a webhook via the webhooks channels', async () => {
+    const create = await router.handle(Channels.webhooksCreate.name, {
+      name: 'News', method: 'GET', url: 'http://example.com/news', parameterized: false
+    });
+    expect(create.ok).toBe(true);
+    const webhookId = (create as { ok: true; data: { id: string } }).data.id;
+
+    const list = await router.handle(Channels.webhooksList.name, {});
+    expect(list.ok).toBe(true);
+    if (list.ok) expect((list.data as unknown[]).length).toBe(1);
+
+    const update = await router.handle(Channels.webhooksUpdate.name, {
+      id: webhookId, name: 'News v2', method: 'GET', url: 'http://example.com/news', parameterized: false, enabled: false
+    });
+    expect(update.ok).toBe(true);
+    const listAfterUpdate = await router.handle(Channels.webhooksList.name, {});
+    if (listAfterUpdate.ok) {
+      const updated = (listAfterUpdate.data as { name: string; enabled: boolean }[])[0];
+      expect(updated.name).toBe('News v2');
+      expect(updated.enabled).toBe(false);
+    }
+
+    const del = await router.handle(Channels.webhooksDelete.name, { id: webhookId });
+    expect(del.ok).toBe(true);
+    if (del.ok) expect((del.data as { success: boolean }).success).toBe(true);
+  });
+
+  it('webhooks:update on an unknown id returns an error envelope', async () => {
+    const res = await router.handle(Channels.webhooksUpdate.name, {
+      id: 'nope', name: 'X', method: 'GET', url: 'http://example.com', parameterized: false
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.message).toMatch(/not found/i);
+  });
+
+  it('blocks deleting a webhook referenced by a published Space, surfaced as {success:false}', async () => {
+    const create = await router.handle(Channels.webhooksCreate.name, {
+      name: 'News', method: 'GET', url: 'http://example.com/news', parameterized: false
+    });
+    const webhookId = (create as { ok: true; data: { id: string } }).data.id;
+
+    const spaceRes = await router.handle(Channels.spacesCreate.name, {
+      name: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5, allowedWebhookIds: [webhookId]
+    });
+    const spaceId = (spaceRes as { ok: true; data: { id: string } }).data.id;
+    await router.handle(Channels.agentsCreate.name, { spaceId, name: 'A', role: 'R', systemPrompt: 'sys', position: 0 });
+    await router.handle(Channels.spacesPublish.name, { id: spaceId });
+
+    const del = await router.handle(Channels.webhooksDelete.name, { id: webhookId });
+    expect(del.ok).toBe(true);
+    if (del.ok) {
+      const data = del.data as { success: boolean; affectedSpaces: string[] };
+      expect(data.success).toBe(false);
+      expect(data.affectedSpaces).toContain('S');
+    }
+  });
+
+  it('webhooks:test fetches the URL and returns {ok, status, snippet}', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'pong' });
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      const res = await router.handle(Channels.webhooksTest.name, {
+        name: 'Ping', method: 'GET', url: 'http://example.com/ping', parameterized: false
+      });
+      expect(res.ok).toBe(true);
+      if (res.ok) {
+        const data = res.data as { ok: boolean; status: number; snippet: string };
+        expect(data.ok).toBe(true);
+        expect(data.status).toBe(200);
+        expect(data.snippet).toBe('pong');
+      }
+      expect(fetchSpy).toHaveBeenCalledWith('http://example.com/ping', expect.objectContaining({ method: 'GET' }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('creates a Space, adds an agent, and publishes it end to end', async () => {

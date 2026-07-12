@@ -175,6 +175,39 @@ describe('Database and Repositories Integration', () => {
     expect(del.affectedSpaces).toContain('SpaceW2');
   });
 
+  it('WebhookRepo.update persists changes and SpaceRepo round-trips allowedWebhookIds', () => {
+    const webhookId = randomUUID();
+    webhookRepo.create({
+      id: webhookId, name: 'WH1', description: 'orig', method: 'GET', url: 'http://w', parameterized: false, enabled: true, createdAt: Date.now()
+    });
+
+    webhookRepo.update({
+      id: webhookId, name: 'WH1 renamed', description: 'updated', method: 'POST', url: 'http://w2',
+      parameterized: true, headers: { Authorization: 'Bearer x' }, enabled: false, createdAt: Date.now()
+    });
+
+    const updated = webhookRepo.list().find((w) => w.id === webhookId);
+    expect(updated).toMatchObject({
+      name: 'WH1 renamed', description: 'updated', method: 'POST', url: 'http://w2',
+      parameterized: true, headers: { Authorization: 'Bearer x' }, enabled: false
+    });
+
+    const spaceId = randomUUID();
+    spaceRepo.create({
+      id: spaceId, name: 'S', description: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now(), allowedWebhookIds: [webhookId]
+    });
+
+    expect(spaceRepo.get(spaceId)?.allowedWebhookIds).toEqual([webhookId]);
+
+    // update() can change the allowed set too (draft space, so this is allowed)
+    spaceRepo.update({
+      id: spaceId, name: 'S', description: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now(), allowedWebhookIds: []
+    });
+    expect(spaceRepo.get(spaceId)?.allowedWebhookIds).toEqual([]);
+  });
+
   it('one-active-run rule and markInterrupted', () => {
     const spaceId = randomUUID();
     spaceRepo.create({
