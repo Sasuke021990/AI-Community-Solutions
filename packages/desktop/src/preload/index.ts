@@ -126,7 +126,9 @@ const api = {
     listBySpace: (spaceId: string) => invoke<Run[]>(Channels.runsListBySpace.name, { spaceId }),
     events: (runId: string) => invoke<RunEvent[]>(Channels.runsEvents.name, { runId }),
     onEvent: (cb: (e: PersistedRunEvent) => void) => subscribe<PersistedRunEvent>(RUN_EVENT_PUSH_CHANNEL, cb),
-    onStatus: (cb: (run: Run) => void) => subscribe<Run>(RUN_STATUS_PUSH_CHANNEL, cb)
+    onStatus: (cb: (run: Run) => void) => subscribe<Run>(RUN_STATUS_PUSH_CHANNEL, cb),
+    openPdf: (path: string) => invoke<void>(Channels.runsOpenPdf.name, { path }),
+    showPdfInFolder: (path: string) => invoke<void>(Channels.runsShowInFolder.name, { path })
   },
   models: {
     list: () => invoke<{ models: string[] }>(Channels.modelsList.name)

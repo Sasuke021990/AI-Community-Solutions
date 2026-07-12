@@ -1,10 +1,11 @@
-import { app, BrowserWindow, Menu, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, shell } from 'electron';
 import { join } from 'path';
 import { openDatabase, createRepositories, LmStudioClient, ConcurrencyLimiter } from '@acs/core';
 import { Channels } from '../shared/ipc.js';
 import { createIpcRouter } from './ipcRouter.js';
 import { RunManager } from './RunManager.js';
 import { SettingsStore } from './SettingsStore.js';
+import { writeRunPdf } from './PdfWriter.js';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -77,13 +78,22 @@ app.whenReady().then(() => {
     mainWindow?.webContents.send(channel, payload);
   };
 
-  const runManager = new RunManager(repos, () => lmStudioClient, () => concurrencyLimiter, broadcast);
+  const runManager = new RunManager(
+    repos,
+    () => lmStudioClient,
+    () => concurrencyLimiter,
+    broadcast,
+    () => settingsStore.get().reportsFolder,
+    writeRunPdf
+  );
 
   const router = createIpcRouter({
     repos,
     getLmStudioClient: () => lmStudioClient,
     runManager,
-    settingsStore
+    settingsStore,
+    openPath: (p) => shell.openPath(p),
+    showInFolder: (p) => shell.showItemInFolder(p)
   });
 
   for (const { name } of Object.values(Channels)) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderSafeMarkdown } from './markdown.js';
+import { renderSafeMarkdown } from './renderSafeMarkdown.js';
 
 describe('renderSafeMarkdown', () => {
   it('escapes raw HTML/script tags in the input rather than passing them through', () => {

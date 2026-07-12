@@ -38,7 +38,9 @@ describe('ipcRouter', () => {
       repos,
       getLmStudioClient: () => new LmStudioClient(),
       runManager: fakeRunManager,
-      settingsStore
+      settingsStore,
+      openPath: async (p) => p.includes('error') ? 'failed to open' : '',
+      showInFolder: () => {}
     });
   });
 
@@ -231,6 +233,20 @@ describe('ipcRouter', () => {
     const res = await router.handle(Channels.runsStart.name, { spaceId: 's1', problem: 'q' });
     expect(res.ok).toBe(true);
     expect(startRunCalls).toEqual([{ spaceId: 's1', problem: 'q' }]);
+  });
+
+  it('runs:openPdf delegates to shell and surfaces errors', async () => {
+    const successRes = await router.handle(Channels.runsOpenPdf.name, { path: '/tmp/ok.pdf' });
+    expect(successRes.ok).toBe(true);
+    
+    const errRes = await router.handle(Channels.runsOpenPdf.name, { path: '/tmp/error.pdf' });
+    expect(errRes.ok).toBe(false);
+    if (!errRes.ok) expect(errRes.error.message).toBe('failed to open');
+  });
+
+  it('runs:showInFolder delegates to shell', async () => {
+    const res = await router.handle(Channels.runsShowInFolder.name, { path: '/tmp/ok.pdf' });
+    expect(res.ok).toBe(true);
   });
 
   it('gets and updates settings', async () => {

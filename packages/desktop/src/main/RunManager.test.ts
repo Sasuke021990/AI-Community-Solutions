@@ -28,16 +28,21 @@ describe('RunManager', () => {
   let lmClient: LmStudioClient;
   let broadcasts: { channel: string; payload: unknown }[];
 
+  let writePdfMock: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     const db = openDatabase(join(tmpdir(), `runmanager-${randomUUID()}.sqlite`));
     repos = createRepositories(db);
     lmClient = new LmStudioClient();
     broadcasts = [];
+    writePdfMock = vi.fn().mockResolvedValue(undefined);
   });
 
   function makeManager() {
     return new RunManager(repos, () => lmClient, () => new ConcurrencyLimiter(2), (channel, payload) =>
-      broadcasts.push({ channel, payload })
+      broadcasts.push({ channel, payload }),
+      () => '/tmp/reports',
+      writePdfMock
     );
   }
 
@@ -75,6 +80,32 @@ describe('RunManager', () => {
     const run = repos.runs.get(runId);
     expect(run?.status).toBe(RunStatus.Completed);
     expect(run?.finalAnswer).toBe('done');
+    expect(writePdfMock).toHaveBeenCalled();
+    expect(run?.pdfPath).toBeDefined();
+  });
+
+  it('swallows PDF generation failures so the run remains completed', async () => {
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+    vi.spyOn(lmClient, 'chat').mockResolvedValue({
+      message: { role: 'assistant', content: '<final_answer>done</final_answer>' }
+    });
+
+    repos.spaces.create(mkSpace({ status: SpaceStatus.Draft }));
+    repos.agents.create({ id: 'a1', spaceId: 's1', name: 'A', role: 'R', systemPrompt: 'sys', isOrchestrator: false, position: 0 });
+    repos.spaces.publish('s1');
+
+    writePdfMock.mockRejectedValue(new Error('PDF engine crashed'));
+
+    const manager = makeManager();
+    const { runId } = await manager.startRun('s1', 'solve it');
+
+    await vi.waitFor(() => {
+      expect(broadcasts.some((b) => b.channel === RUN_STATUS_PUSH_CHANNEL)).toBe(true);
+    });
+
+    const run = repos.runs.get(runId);
+    expect(run?.status).toBe(RunStatus.Completed);
+    expect(run?.pdfPath).toBeUndefined(); // It failed, so no path was set
   });
 
   it('enforces one active run per Space at the manager level (bubbles up from RunRepo)', async () => {

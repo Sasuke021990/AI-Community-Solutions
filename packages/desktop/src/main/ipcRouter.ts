@@ -19,6 +19,8 @@ export interface IpcRouterDeps {
   getLmStudioClient: () => LmStudioClient;
   runManager: RunManager;
   settingsStore: SettingsStore;
+  openPath: (p: string) => Promise<string>;
+  showInFolder: (p: string) => void;
 }
 
 type Handler = (payload: unknown) => Promise<unknown>;
@@ -190,6 +192,19 @@ export function createIpcRouter(deps: IpcRouterDeps) {
     [Channels.runsEvents.name]: async (p) => {
       const { runId } = Channels.runsEvents.requestSchema.parse(p);
       return repos.runEvents.listByRun(runId);
+    },
+
+    [Channels.runsOpenPdf.name]: async (p) => {
+      const { path } = Channels.runsOpenPdf.requestSchema.parse(p);
+      const err = await deps.openPath(path);
+      if (err) throw new Error(err);
+      return undefined;
+    },
+
+    [Channels.runsShowInFolder.name]: async (p) => {
+      const { path } = Channels.runsShowInFolder.requestSchema.parse(p);
+      deps.showInFolder(path);
+      return undefined;
     },
 
     [Channels.modelsList.name]: async () => ({ models: await getLmStudioClient().listModels() }),

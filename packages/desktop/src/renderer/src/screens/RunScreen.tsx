@@ -183,13 +183,6 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
                 Final answer
               </div>
               <div dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(run.finalAnswer) }} />
-              <div className="row" style={{ marginTop: 12 }}>
-                {run.pdfPath ? (
-                  <span className="field-hint">PDF saved to: {run.pdfPath}</span>
-                ) : (
-                  <span className="field-hint">PDF report generation is not available yet.</span>
-                )}
-              </div>
             </div>
           )}
 
@@ -202,6 +195,13 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
           {run.status === 'stopped' && (
             <div className="banner banner-info" style={{ marginTop: 16 }}>
               Run stopped. Partial transcript above.
+            </div>
+          )}
+
+          {run.status !== 'running' && run.pdfPath && (
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn" onClick={() => call(window.acs.runs.openPdf(run.pdfPath!))}>Open PDF</button>
+              <button className="btn" onClick={() => call(window.acs.runs.showPdfInFolder(run.pdfPath!))}>Show in folder</button>
             </div>
           )}
         </>

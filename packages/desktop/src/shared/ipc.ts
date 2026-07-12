@@ -45,6 +45,8 @@ export function defineChannel<S extends z.ZodTypeAny>(name: string, requestSchem
 
 export const EmptySchema = z.object({}).strict();
 export const IdSchema = z.object({ id: z.string().min(1) });
+export const PathSchema = z.object({ path: z.string().min(1) });
+
 
 // ---- MCP servers ------------------------------------------------------------------
 
@@ -166,6 +168,8 @@ export const Channels = {
   runsGet: defineChannel('runs:get', IdSchema),
   runsListBySpace: defineChannel('runs:listBySpace', RunsListBySpaceSchema),
   runsEvents: defineChannel('runs:events', RunsEventsSchema),
+  runsOpenPdf: defineChannel('runs:openPdf', PathSchema),
+  runsShowInFolder: defineChannel('runs:showInFolder', PathSchema),
 
   modelsList: defineChannel('models:list', EmptySchema),
 

@@ -252,6 +252,20 @@ describe('Database and Repositories Integration', () => {
     expect(runRepo.hasActiveRun(spaceId)).toBe(false);
   });
 
+  it('setPdfPath persists and is returned by get', () => {
+    const spaceId = randomUUID();
+    spaceRepo.create({
+      id: spaceId, name: 'S', description: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm1', maxRounds: 5,
+      status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    const runId = randomUUID();
+    runRepo.create({ id: runId, spaceId, problem: 'P', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() });
+
+    expect(runRepo.get(runId)?.pdfPath).toBeUndefined();
+    runRepo.setPdfPath(runId, '/path/to/report.pdf');
+    expect(runRepo.get(runId)?.pdfPath).toBe('/path/to/report.pdf');
+  });
+
   it('delete and unpublish are blocked while a run is active on the space', () => {
     const spaceId = randomUUID();
     spaceRepo.create({

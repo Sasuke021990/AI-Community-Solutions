@@ -56,10 +56,15 @@ export class RunRepo {
   }
 
   public listBySpace(spaceId: string): Run[] {
-    const rows = this.db
-      .prepare('SELECT * FROM runs WHERE space_id = ? ORDER BY started_at DESC')
-      .all(spaceId) as RunRow[];
+    const stmt = this.db.prepare(
+      'SELECT id, space_id, problem, status, rounds_used, started_at, finished_at, final_answer, error, pdf_path FROM runs WHERE space_id = ? ORDER BY started_at DESC'
+    );
+    const rows = stmt.all(spaceId) as RunRow[];
     return rows.map((r) => this.mapRow(r));
+  }
+
+  public setPdfPath(id: string, pdfPath: string): void {
+    this.db.prepare('UPDATE runs SET pdf_path = ? WHERE id = ?').run(pdfPath, id);
   }
 
   private mapRow(row: RunRow): Run {

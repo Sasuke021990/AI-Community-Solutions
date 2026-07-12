@@ -7,9 +7,12 @@ import {
   RunOrchestrator,
   RunStatus,
   SpaceStatus,
-  PersistedRunEvent
+  PersistedRunEvent,
+  RunReportHtml,
+  renderRunReport
 } from '@acs/core';
 import { RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL } from '../shared/ipc.js';
+import { join } from 'path';
 
 export type Broadcast = (channel: string, payload: unknown) => void;
 
@@ -30,7 +33,9 @@ export class RunManager {
     private repos: Repositories,
     private getLmStudioClient: () => LmStudioClient,
     private getConcurrencyLimiter: () => ConcurrencyLimiter,
-    private broadcast: Broadcast
+    private broadcast: Broadcast,
+    private getReportsFolder: () => string,
+    private writePdf: (report: RunReportHtml, outPath: string, spaceName: string, dateStr: string) => Promise<void>
   ) {}
 
   public async startRun(spaceId: string, problem: string): Promise<StartRunResult> {
@@ -81,10 +86,25 @@ export class RunManager {
         // RunOrchestrator.start() already catches and persists failures;
         // this guards only against a bug in that catch itself.
       })
-      .finally(() => {
+      .finally(async () => {
         this.active.delete(run.id);
         const finalRun = this.repos.runs.get(run.id);
-        this.broadcast(RUN_STATUS_PUSH_CHANNEL, finalRun);
+        if (finalRun) {
+          try {
+            const space = this.repos.spaces.get(finalRun.spaceId)!;
+            const agents = this.repos.agents.listBySpace(finalRun.spaceId);
+            const events = this.repos.runEvents.listByRun(finalRun.id);
+            const report = renderRunReport({ run: finalRun, space, agents, events });
+            const file = join(this.getReportsFolder(), buildPdfFilename(space.name, finalRun));
+            const dateStr = new Date(finalRun.finishedAt ?? Date.now()).toLocaleString();
+            await this.writePdf(report, file, space.name, dateStr);
+            this.repos.runs.setPdfPath(finalRun.id, file);
+          } catch (e) {
+            // Log only - a PDF failure must never turn a finished run into a failure.
+            console.error('PDF generation failed:', e);
+          }
+        }
+        this.broadcast(RUN_STATUS_PUSH_CHANNEL, this.repos.runs.get(run.id));
       });
 
     return { runId: run.id };
@@ -99,4 +119,16 @@ export class RunManager {
   public isActive(runId: string): boolean {
     return this.active.has(runId);
   }
+}
+
+function buildPdfFilename(spaceName: string, run: { id: string, startedAt: number, finishedAt?: number }): string {
+  const slug = spaceName.replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '');
+  const d = new Date(run.finishedAt ?? run.startedAt);
+  const YYYY = d.getFullYear();
+  const MM = String(d.getMonth() + 1).padStart(2, '0');
+  const DD = String(d.getDate()).padStart(2, '0');
+  const HH = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${slug}-${run.id.slice(0, 8)}-${YYYY}${MM}${DD}-${HH}${mm}${ss}.pdf`;
 }
