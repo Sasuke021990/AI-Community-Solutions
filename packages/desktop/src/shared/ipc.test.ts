@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Strategy } from '@acs/core';
-import { Channels, McpServerInputSchema, SpaceInputSchema, AgentInputSchema, SettingsPatchSchema } from './ipc.js';
+import { Channels, McpServerInputSchema, SpaceInputSchema, SpaceUpdateTemperatureSchema, AgentInputSchema, SettingsPatchSchema } from './ipc.js';
 
 describe('McpServerInputSchema', () => {
   it('accepts a valid stdio config and defaults enabled to true', () => {
@@ -46,6 +46,18 @@ describe('SpaceInputSchema', () => {
     expect(() =>
       SpaceInputSchema.parse({ name: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5, temperature: 2.1 })
     ).toThrow();
+  });
+});
+
+describe('SpaceUpdateTemperatureSchema', () => {
+  it('accepts a valid temperature and an undefined temperature (clearing it)', () => {
+    expect(SpaceUpdateTemperatureSchema.parse({ id: 's1', temperature: 0.5 }).temperature).toBe(0.5);
+    expect(SpaceUpdateTemperatureSchema.parse({ id: 's1' }).temperature).toBeUndefined();
+  });
+
+  it('rejects a missing id or an out-of-range temperature', () => {
+    expect(() => SpaceUpdateTemperatureSchema.parse({ temperature: 0.5 })).toThrow();
+    expect(() => SpaceUpdateTemperatureSchema.parse({ id: 's1', temperature: 2.1 })).toThrow();
   });
 });
 

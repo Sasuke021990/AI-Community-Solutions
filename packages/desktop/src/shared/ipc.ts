@@ -102,6 +102,7 @@ export const SpaceInputSchema = z.object({
   allowedWebhookIds: z.array(z.string()).optional()
 });
 export const SpaceUpdateSchema = SpaceInputSchema.extend({ id: z.string().min(1) });
+export const SpaceUpdateTemperatureSchema = z.object({ id: z.string().min(1), temperature: z.number().min(0).max(2).optional() });
 
 // ---- Agents ---------------------------------------------------------------------------
 
@@ -158,6 +159,7 @@ export const Channels = {
   spacesGet: defineChannel('spaces:get', IdSchema),
   spacesCreate: defineChannel('spaces:create', SpaceInputSchema),
   spacesUpdate: defineChannel('spaces:update', SpaceUpdateSchema),
+  spacesUpdateTemperature: defineChannel('spaces:updateTemperature', SpaceUpdateTemperatureSchema),
   spacesDelete: defineChannel('spaces:delete', IdSchema),
   spacesPublish: defineChannel('spaces:publish', IdSchema),
   spacesUnpublish: defineChannel('spaces:unpublish', IdSchema),

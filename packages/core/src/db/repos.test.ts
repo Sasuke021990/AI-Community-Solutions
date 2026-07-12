@@ -72,6 +72,37 @@ describe('Database and Repositories Integration', () => {
     expect(spaceRepo.get(spaceId2)!.temperature).toBe(0.8);
   });
 
+  it('updateTemperature works on a Published Space, where update() is blocked', () => {
+    const spaceId = randomUUID();
+    spaceRepo.create({
+      id: spaceId, name: 'T3', description: 'T3', strategy: Strategy.Orchestrator,
+      defaultModel: 'm', maxRounds: 5, temperature: 0.2, status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    agentRepo.create({
+      id: randomUUID(), spaceId, name: 'Orch', role: 'Orch', systemPrompt: 'Sys', position: 1, isOrchestrator: true
+    });
+    const pub = spaceRepo.publish(spaceId);
+    expect(pub.success).toBe(true);
+
+    // The general update() path is rejected once Published...
+    const space = spaceRepo.get(spaceId)!;
+    space.temperature = 0.9;
+    expect(() => spaceRepo.update(space)).toThrowError(/Cannot edit a published space/);
+
+    // ...but the dedicated temperature path is not, since it's a runtime
+    // tuning knob rather than locked structure.
+    spaceRepo.updateTemperature(spaceId, 0.9);
+    expect(spaceRepo.get(spaceId)!.temperature).toBe(0.9);
+
+    // Clearing it back to undefined (NULL) also works.
+    spaceRepo.updateTemperature(spaceId, undefined);
+    expect(spaceRepo.get(spaceId)!.temperature).toBeUndefined();
+  });
+
+  it('updateTemperature throws for a nonexistent Space', () => {
+    expect(() => spaceRepo.updateTemperature('nope', 0.5)).toThrowError(/not found/i);
+  });
+
   it('publish validation matrix', () => {
     const spaceId = randomUUID();
     spaceRepo.create({

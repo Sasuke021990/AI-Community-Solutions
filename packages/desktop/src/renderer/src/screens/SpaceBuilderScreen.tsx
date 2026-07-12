@@ -71,6 +71,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [savingTemperature, setSavingTemperature] = useState(false);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
   const agentsSectionRef = useRef<HTMLDivElement>(null);
 
@@ -190,6 +191,25 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
       setError((e as Error).message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Temperature is a runtime tuning knob, not locked structure - unlike the
+   * rest of the form, it's savable on a Published Space via a dedicated
+   * endpoint (SpaceRepo.update() rejects any edit while Published).
+   */
+  async function saveTemperature() {
+    if (!space) return;
+    setSavingTemperature(true);
+    setError(null);
+    try {
+      await call(window.acs.spaces.updateTemperature(space.id, form.temperature));
+      await loadAll(space.id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSavingTemperature(false);
     }
   }
 
@@ -423,6 +443,11 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
               <div className="field-hint">
                 Lower = more focused & reliable (recommended 0.2–0.4). Higher = more creative but less likely to follow instructions.
               </div>
+              {isPublished && (
+                <button className="btn" style={{ marginTop: 8 }} onClick={saveTemperature} disabled={savingTemperature}>
+                  {savingTemperature ? 'Saving...' : 'Save temperature'}
+                </button>
+              )}
             </div>
           </details>
           <div className="field">

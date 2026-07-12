@@ -90,6 +90,18 @@ export class SpaceRepo {
     })();
   }
 
+  /**
+   * Temperature is a runtime tuning knob, not part of a Space's locked
+   * structure - unlike update(), this is allowed even while Published or
+   * preset-locked, so it can be tuned without unpublishing.
+   */
+  public updateTemperature(id: string, temperature: number | undefined): void {
+    const current = this.db.prepare('SELECT id FROM spaces WHERE id = ?').get(id) as { id: string } | undefined;
+    if (!current) throw new Error('Space not found');
+    this.db.prepare('UPDATE spaces SET temperature = ?, updated_at = ? WHERE id = ?')
+      .run(temperature ?? null, Date.now(), id);
+  }
+
   public delete(id: string): void {
     this.assertNoActiveRun(id, 'delete');
     this.db.prepare('DELETE FROM spaces WHERE id = ?').run(id);

@@ -110,6 +110,8 @@ const api = {
     get: (id: string) => invoke<SpaceWithActivity | null>(Channels.spacesGet.name, { id }),
     create: (input: SpaceInput) => invoke<SpaceWithActivity>(Channels.spacesCreate.name, input),
     update: (input: SpaceInput & { id: string }) => invoke<void>(Channels.spacesUpdate.name, input),
+    updateTemperature: (id: string, temperature: number | undefined) =>
+      invoke<void>(Channels.spacesUpdateTemperature.name, { id, temperature }),
     delete: (id: string) => invoke<void>(Channels.spacesDelete.name, { id }),
     publish: (id: string) => invoke<PublishResult>(Channels.spacesPublish.name, { id }),
     unpublish: (id: string) => invoke<void>(Channels.spacesUnpublish.name, { id })

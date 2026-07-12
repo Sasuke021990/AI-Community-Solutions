@@ -127,6 +127,12 @@ export function createIpcRouter(deps: IpcRouterDeps) {
       return undefined;
     },
 
+    [Channels.spacesUpdateTemperature.name]: async (p) => {
+      const { id, temperature } = Channels.spacesUpdateTemperature.requestSchema.parse(p);
+      repos.spaces.updateTemperature(id, temperature);
+      return undefined;
+    },
+
     [Channels.spacesDelete.name]: async (p) => {
       const { id } = Channels.spacesDelete.requestSchema.parse(p);
       repos.spaces.delete(id);
