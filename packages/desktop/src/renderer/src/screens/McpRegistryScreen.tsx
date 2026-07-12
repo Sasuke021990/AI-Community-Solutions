@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { McpServerConfig } from '@acs/core';
 import { call } from '../lib/api.js';
+import { WebhookRegistrySection } from './WebhookRegistrySection.js';
 
 interface FormState {
   id?: string;
@@ -131,8 +132,8 @@ export function McpRegistryScreen() {
     <div>
       <div className="page-header">
         <div>
-          <h1>MCP Servers</h1>
-          <p className="subtitle">Register tool servers; Spaces choose which of these they may use.</p>
+          <h1>Data Sources</h1>
+          <p className="subtitle">Register tool servers and webhooks; Spaces choose which of these they may use.</p>
         </div>
         <button className="btn btn-primary" onClick={() => { setForm({ ...emptyForm }); setTestResult(null); }}>
           Add server
@@ -240,6 +241,8 @@ export function McpRegistryScreen() {
           </tbody>
         </table>
       )}
+
+      <WebhookRegistrySection />
     </div>
   );
 }

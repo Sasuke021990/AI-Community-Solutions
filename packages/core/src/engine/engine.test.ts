@@ -40,7 +40,7 @@ describe('RunOrchestrator', () => {
     spaceRepo.create(space);
     runRepo.create(run);
 
-    const engine = new RunOrchestrator(run, space, agents, [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
     await engine.start();
 
     const updated = runRepo.get('r1');
@@ -61,7 +61,7 @@ describe('RunOrchestrator', () => {
     spaceRepo.create(space);
     runRepo.create(run);
 
-    const engine = new RunOrchestrator(run, space, agents, [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
     await engine.start();
 
     const updated = runRepo.get('r1');
@@ -87,7 +87,7 @@ describe('RunOrchestrator', () => {
     spaceRepo.create(space);
     runRepo.create(run);
 
-    const engine = new RunOrchestrator(run, space, agents, [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
     await engine.start();
 
     const updated = runRepo.get('r1');
@@ -110,7 +110,7 @@ describe('RunOrchestrator', () => {
     spaceRepo.create(space);
     runRepo.create(run);
 
-    const engine = new RunOrchestrator(run, space, agents, [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
     const received: string[] = [];
     const unsub = engine.onEvent((e) => received.push(e.type));
 
@@ -166,7 +166,7 @@ describe('RunOrchestrator', () => {
     spaceRepo.create(space);
     runRepo.create(run);
 
-    const engine = new RunOrchestrator(run, space, agents, [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter(4));
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter(4));
     await engine.start();
 
     expect(workerBSawAbort).toBe(true);
@@ -196,7 +196,7 @@ describe('RunOrchestrator', () => {
     runRepo.create(runB); // unrelated run in another space, still running
 
     const agents = [{ id: 'a1', spaceId: 'sa', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
-    const engine = new RunOrchestrator(runA, spaceA, agents, [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+    const engine = new RunOrchestrator(runA, spaceA, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
 
     const p = engine.start();
     await new Promise((r) => setTimeout(r, 20)); // let it reach the hanging chat

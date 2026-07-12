@@ -12,6 +12,18 @@ export interface McpServerConfig {
   createdAt: number;
 }
 
+export interface WebhookConfig {
+  id: string;
+  name: string;
+  description: string;
+  method: 'GET' | 'POST';
+  url: string;
+  parameterized: boolean;
+  headers?: Record<string, string>;
+  enabled: boolean;
+  createdAt: number;
+}
+
 export interface Space {
   id: string;
   name: string;
@@ -25,6 +37,7 @@ export interface Space {
   updatedAt: number;
   agents?: Agent[];
   allowedMcpServerIds?: string[];
+  allowedWebhookIds?: string[];
 }
 
 export interface Agent {

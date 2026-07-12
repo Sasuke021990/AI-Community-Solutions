@@ -7,7 +7,8 @@ import type {
   Run,
   RunEvent,
   PersistedRunEvent,
-  RoleTemplate
+  RoleTemplate,
+  WebhookConfig
 } from '@acs/core';
 import type { Settings, SettingsPatch } from '../main/SettingsStore.js';
 import type { SpaceWithActivity, PresetWithStatus } from '../main/ipcRouter.js';
@@ -36,6 +37,22 @@ export interface McpServerInput {
   enabled?: boolean;
 }
 
+export interface WebhookInput {
+  name: string;
+  description?: string;
+  method: 'GET' | 'POST';
+  url: string;
+  parameterized?: boolean;
+  headers?: Record<string, string>;
+  enabled?: boolean;
+}
+
+export interface WebhookTestResult {
+  ok: boolean;
+  status?: number;
+  snippet: string;
+}
+
 export interface SpaceInput {
   name: string;
   description?: string;
@@ -43,6 +60,7 @@ export interface SpaceInput {
   defaultModel: string;
   maxRounds: number;
   allowedMcpServerIds?: string[];
+  allowedWebhookIds?: string[];
 }
 
 export interface AgentInput {
@@ -78,6 +96,13 @@ const api = {
     update: (input: McpServerInput & { id: string }) => invoke<void>(Channels.mcpUpdate.name, input),
     delete: (id: string) => invoke<DeleteMcpResult>(Channels.mcpDelete.name, { id }),
     test: (input: McpServerInput) => invoke<TestConnectionResult>(Channels.mcpTest.name, input)
+  },
+  webhooks: {
+    list: () => invoke<WebhookConfig[]>(Channels.webhooksList.name),
+    create: (input: WebhookInput) => invoke<WebhookConfig>(Channels.webhooksCreate.name, input),
+    update: (input: WebhookInput & { id: string }) => invoke<void>(Channels.webhooksUpdate.name, input),
+    delete: (id: string) => invoke<DeleteMcpResult>(Channels.webhooksDelete.name, { id }),
+    test: (input: WebhookInput) => invoke<WebhookTestResult>(Channels.webhooksTest.name, input)
   },
   spaces: {
     list: () => invoke<SpaceWithActivity[]>(Channels.spacesList.name),

@@ -3,6 +3,7 @@
     "id": "six-thinking-hats",
     "name": "Six Thinking Hats",
     "description": "Six distinct cognitive lenses to systematically explore a problem without debate.",
+    "bestFor": "Exploring a decision from every angle at once — facts, feelings, risks, benefits, and creativity — without it turning into one-sided debate.",
     "strategy": "orchestrator",
     "maxRounds": 8,
     "agents": [
@@ -48,6 +49,7 @@
     "id": "ooda-loop",
     "name": "OODA Loop",
     "description": "Observe, Orient, Decide, Act. A rapid tactical decision-making cycle.",
+    "bestFor": "Fast tactical decisions under time pressure or in fast-changing, uncertain situations.",
     "strategy": "round-robin",
     "maxRounds": 3,
     "agents": [
@@ -81,6 +83,7 @@
     "id": "means-end-analysis",
     "name": "Means-End Analysis",
     "description": "Iteratively reduces the difference between the current state and the goal.",
+    "bestFor": "Goal-driven problems where you can define a clear target state and close the gap to it step by step.",
     "strategy": "orchestrator",
     "maxRounds": 8,
     "agents": [
@@ -120,6 +123,7 @@
     "id": "design-thinking",
     "name": "Design Thinking",
     "description": "Human-centric problem solving: empathize, define, ideate, prototype, test.",
+    "bestFor": "Human-centered problems with real users whose needs and pain points should drive the solution.",
     "strategy": "round-robin",
     "maxRounds": 2,
     "agents": [
@@ -159,6 +163,7 @@
     "id": "triz",
     "name": "TRIZ",
     "description": "Theory of Inventive Problem Solving: resolves technical contradictions systematically.",
+    "bestFor": "Inventive or technical problems that hit a hard trade-off or contradiction (improving X makes Y worse).",
     "strategy": "orchestrator",
     "maxRounds": 8,
     "agents": [
@@ -198,6 +203,7 @@
     "id": "alternative-approaches",
     "name": "Alternative Approaches",
     "description": "Three distinct strategists propose, critique, and converge on the best approach.",
+    "bestFor": "When you want several genuinely different solution options generated and weighed against each other before committing.",
     "strategy": "debate",
     "maxRounds": 8,
     "agents": [
@@ -225,6 +231,7 @@
     "id": "the-core-framework",
     "name": "The Core Framework",
     "description": "Define, deconstruct, analyze constraints, test hypothesis, evaluate.",
+    "bestFor": "General-purpose structured problem solving: isolate the root problem, break it down, test a fix, and iterate.",
     "strategy": "round-robin",
     "maxRounds": 2,
     "agents": [

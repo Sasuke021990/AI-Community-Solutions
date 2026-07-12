@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Database } from './Database.js';
-import { McpServerRepo, SpaceRepo, AgentRepo, RunRepo, RunEventRepo } from './repos/index.js';
+import { McpServerRepo, SpaceRepo, AgentRepo, RunRepo, RunEventRepo, WebhookRepo } from './repos/index.js';
 import { Strategy, SpaceStatus, RunStatus, RunEventType } from '../domain/enums.js';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -15,6 +15,7 @@ describe('Database and Repositories Integration', () => {
   let agentRepo: AgentRepo;
   let runRepo: RunRepo;
   let runEventRepo: RunEventRepo;
+  let webhookRepo: WebhookRepo;
 
   beforeEach(() => {
     dbPath = join(tmpdir(), `test-db-${randomUUID()}.sqlite`);
@@ -25,6 +26,7 @@ describe('Database and Repositories Integration', () => {
     agentRepo = new AgentRepo(db);
     runRepo = new RunRepo(db);
     runEventRepo = new RunEventRepo(db);
+    webhookRepo = new WebhookRepo(db);
   });
 
   afterEach(() => {
@@ -136,6 +138,41 @@ describe('Database and Repositories Integration', () => {
     del = mcpRepo.delete(mcpId);
     expect(del.success).toBe(false);
     expect(del.affectedSpaces).toContain('Space2');
+  });
+
+  it('Webhook delete-block when referenced by published space', () => {
+    const webhookId = randomUUID();
+    webhookRepo.create({
+      id: webhookId, name: 'WH1', description: '', method: 'GET', url: 'http://w', parameterized: false, enabled: true, createdAt: Date.now()
+    });
+
+    const spaceId = randomUUID();
+    spaceRepo.create({
+      id: spaceId, name: 'SpaceW', description: 'desc', strategy: Strategy.RoundRobin,
+      defaultModel: 'm1', maxRounds: 5, status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now(),
+      allowedWebhookIds: [webhookId]
+    });
+
+    // Draft space -> delete succeeds
+    let del = webhookRepo.delete(webhookId);
+    expect(del.success).toBe(true);
+
+    // Recreate
+    webhookRepo.create({ id: webhookId, name: 'WH1', description: '', method: 'GET', url: 'http://w', parameterized: false, enabled: true, createdAt: Date.now() });
+    spaceRepo.create({
+      id: spaceId + '2', name: 'SpaceW2', description: 'desc', strategy: Strategy.RoundRobin,
+      defaultModel: 'm1', maxRounds: 5, status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now(),
+      allowedWebhookIds: [webhookId]
+    });
+    agentRepo.create({
+      id: randomUUID(), spaceId: spaceId + '2', name: 'A', role: 'A', systemPrompt: 'A', position: 1, isOrchestrator: false
+    });
+    spaceRepo.publish(spaceId + '2');
+
+    // Published space -> delete blocked
+    del = webhookRepo.delete(webhookId);
+    expect(del.success).toBe(false);
+    expect(del.affectedSpaces).toContain('SpaceW2');
   });
 
   it('one-active-run rule and markInterrupted', () => {

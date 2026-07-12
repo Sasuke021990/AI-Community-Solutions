@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { Agent, McpServerConfig, RoleTemplate, Space } from '@acs/core';
+import { useEffect, useState, useRef } from 'react';
+import type { Agent, McpServerConfig, RoleTemplate, Space, WebhookConfig } from '@acs/core';
 import type { SpaceWithActivity } from '../../../preload/index.js';
 import { call } from '../lib/api.js';
 import { StatusBadge } from '../components/StatusBadge.js';
@@ -26,6 +26,7 @@ interface SpaceForm {
   defaultModel: string;
   maxRounds: number;
   allowedMcpServerIds: string[];
+  allowedWebhookIds: string[];
 }
 
 function toForm(space: Space): SpaceForm {
@@ -35,7 +36,8 @@ function toForm(space: Space): SpaceForm {
     strategy: space.strategy,
     defaultModel: space.defaultModel,
     maxRounds: space.maxRounds,
-    allowedMcpServerIds: space.allowedMcpServerIds ?? []
+    allowedMcpServerIds: space.allowedMcpServerIds ?? [],
+    allowedWebhookIds: space.allowedWebhookIds ?? []
   };
 }
 
@@ -45,7 +47,8 @@ const emptyForm: SpaceForm = {
   strategy: 'round-robin' as Space['strategy'],
   defaultModel: '',
   maxRounds: 8,
-  allowedMcpServerIds: []
+  allowedMcpServerIds: [],
+  allowedWebhookIds: []
 };
 
 export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished, onBack }: SpaceBuilderScreenProps) {
@@ -53,6 +56,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
   const [form, setForm] = useState<SpaceForm>(emptyForm);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
+  const [webhooks, setWebhooks] = useState<WebhookConfig[]>([]);
   const [roleTemplates, setRoleTemplates] = useState<RoleTemplate[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -64,6 +68,11 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (confirmPublish) confirmBtnRef.current?.focus();
+  }, [confirmPublish]);
 
   async function loadModels() {
     try {
@@ -93,6 +102,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
 
   useEffect(() => {
     call(window.acs.mcp.list()).then(setMcpServers).catch(() => {});
+    call(window.acs.webhooks.list()).then(setWebhooks).catch(() => {});
     call(window.acs.templates.list()).then(setRoleTemplates).catch(() => {});
     loadModels();
   }, []);
@@ -120,6 +130,15 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
       allowedMcpServerIds: f.allowedMcpServerIds.includes(id)
         ? f.allowedMcpServerIds.filter((x) => x !== id)
         : [...f.allowedMcpServerIds, id]
+    }));
+  }
+
+  function toggleWebhook(id: string) {
+    setForm((f) => ({
+      ...f,
+      allowedWebhookIds: f.allowedWebhookIds.includes(id)
+        ? f.allowedWebhookIds.filter((x) => x !== id)
+        : [...f.allowedWebhookIds, id]
     }));
   }
 
@@ -387,6 +406,23 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
               ))}
             </div>
           </div>
+          <div className="field">
+            <label>Allowed Webhooks</label>
+            <div className="checkbox-list">
+              {webhooks.length === 0 && <div className="field-hint">No webhooks registered yet.</div>}
+              {webhooks.map((w) => (
+                <label key={w.id}>
+                  <input
+                    type="checkbox"
+                    disabled={isPublished}
+                    checked={form.allowedWebhookIds.includes(w.id)}
+                    onChange={() => toggleWebhook(w.id)}
+                  />
+                  {w.name}
+                </label>
+              ))}
+            </div>
+          </div>
 
           {!isPublished && (
             <div className="row">
@@ -497,7 +533,7 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
             <div className="banner banner-info" style={{ marginTop: 12 }}>
               Publish this Space? Agents and settings will be locked until you unpublish.
               <div className="row" style={{ marginTop: 8 }}>
-                <button className="btn btn-primary" onClick={confirmAndPublish} disabled={publishing}>
+                <button className="btn btn-primary" ref={confirmBtnRef} onClick={confirmAndPublish} disabled={publishing}>
                   {publishing ? 'Publishing...' : 'Confirm publish'}
                 </button>
                 <button className="btn" onClick={() => setConfirmPublish(false)}>

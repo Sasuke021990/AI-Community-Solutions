@@ -25,6 +25,9 @@ export class SpaceRepo {
       if (space.allowedMcpServerIds) {
         this.setAllowedMcpServers(space.id, space.allowedMcpServerIds);
       }
+      if (space.allowedWebhookIds) {
+        this.setAllowedWebhooks(space.id, space.allowedWebhookIds);
+      }
     })();
   }
 
@@ -55,6 +58,9 @@ export class SpaceRepo {
 
       if (space.allowedMcpServerIds) {
         this.setAllowedMcpServers(space.id, space.allowedMcpServerIds);
+      }
+      if (space.allowedWebhookIds) {
+        this.setAllowedWebhooks(space.id, space.allowedWebhookIds);
       }
     })();
   }
@@ -140,6 +146,17 @@ export class SpaceRepo {
     return rows.map(r => r.mcp_server_id);
   }
 
+  private setAllowedWebhooks(spaceId: string, ids: string[]) {
+    this.db.prepare('DELETE FROM space_webhooks WHERE space_id = ?').run(spaceId);
+    const insert = this.db.prepare('INSERT INTO space_webhooks (space_id, webhook_id) VALUES (?, ?)');
+    for (const id of ids) insert.run(spaceId, id);
+  }
+
+  private getAllowedWebhooks(spaceId: string): string[] {
+    const rows = this.db.prepare('SELECT webhook_id FROM space_webhooks WHERE space_id = ?').all(spaceId) as { webhook_id: string }[];
+    return rows.map(r => r.webhook_id);
+  }
+
   private mapRowToSpace(row: SpaceRow): Space {
     return {
       id: row.id,
@@ -152,7 +169,8 @@ export class SpaceRepo {
       presetId: row.preset_id,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      allowedMcpServerIds: this.getAllowedMcpServers(row.id)
+      allowedMcpServerIds: this.getAllowedMcpServers(row.id),
+      allowedWebhookIds: this.getAllowedWebhooks(row.id)
     };
   }
 }

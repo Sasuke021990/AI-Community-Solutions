@@ -4,7 +4,8 @@ import {
   SpaceRepo,
   AgentRepo,
   RunRepo,
-  RunEventRepo
+  RunEventRepo,
+  WebhookRepo
 } from './repos/index.js';
 
 export interface Repositories {
@@ -14,6 +15,7 @@ export interface Repositories {
   agents: AgentRepo;
   runs: RunRepo;
   runEvents: RunEventRepo;
+  webhooks: WebhookRepo;
 }
 
 /** Opens (and migrates) the SQLite database at the given path. */
@@ -30,6 +32,7 @@ export function createRepositories(db: Database): Repositories {
     spaces: new SpaceRepo(sqlite),
     agents: new AgentRepo(sqlite),
     runs: new RunRepo(sqlite),
-    runEvents: new RunEventRepo(sqlite)
+    runEvents: new RunEventRepo(sqlite),
+    webhooks: new WebhookRepo(sqlite)
   };
 }

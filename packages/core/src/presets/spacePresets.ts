@@ -17,6 +17,7 @@ export interface SpacePreset {
   id: string;
   name: string;
   description: string;
+  bestFor: string;
   strategy: Strategy;
   maxRounds: number;
   agents: SpacePresetAgent[];

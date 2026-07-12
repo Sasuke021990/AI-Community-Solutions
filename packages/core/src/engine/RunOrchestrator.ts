@@ -1,4 +1,4 @@
-import { Run, Space, Agent, RunEvent } from '../domain/types.js';
+import { Run, Space, Agent, RunEvent, WebhookConfig } from '../domain/types.js';
 import { Strategy, RunStatus, RunEventType } from '../domain/enums.js';
 import { RunRepo, RunEventRepo } from '../db/repos/index.js';
 import { LmStudioClient, ConcurrencyLimiter, ChatMessage } from '../llm/index.js';
@@ -10,6 +10,7 @@ import {
   DebateStrategy,
   ExecutionState
 } from './strategies/index.js';
+import { fetchWebhook } from '../webhooks/WebhookClient.js';
 import { randomUUID } from 'crypto';
 
 /**
@@ -27,6 +28,7 @@ export class RunOrchestrator {
   private state: ExecutionState;
   private stopped = false;
   private toolMap = new Map<string, { mcp: McpClientWrapper; originalName: string }>();
+  private webhookMap = new Map<string, WebhookConfig>();
   private listeners = new Set<(e: PersistedRunEvent) => void>();
 
   constructor(
@@ -34,6 +36,7 @@ export class RunOrchestrator {
     space: Space,
     agents: Agent[],
     mcpClients: McpClientWrapper[],
+    private webhooks: WebhookConfig[],
     private runRepo: RunRepo,
     private runEventRepo: RunEventRepo,
     lmStudioClient: LmStudioClient,
@@ -173,10 +176,33 @@ export class RunOrchestrator {
         });
       }
     }
+    
+    for (const w of this.webhooks) {
+      if (!w.enabled) continue;
+      const name = `webhook__${w.name.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+      this.webhookMap.set(name, w);
+      this.state.tools.push({
+        type: 'function',
+        function: {
+          name,
+          description: w.description || `Fetch data from the "${w.name}" webhook.`,
+          parameters: w.parameterized
+            ? { type: 'object', properties: { query: { type: 'string', description: 'The search term or input to send.' } }, required: ['query'] }
+            : { type: 'object', properties: {} }
+        }
+      });
+    }
   }
 
   /** Routes a namespaced tool call to its server; failures become error strings. */
   private async callTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const wh = this.webhookMap.get(name);
+    if (wh) {
+      const query = typeof args.query === 'string' ? args.query : undefined;
+      const result = await fetchWebhook(wh, query);
+      return result.body;
+    }
+
     const entry = this.toolMap.get(name);
     if (!entry) return `Error: tool "${name}" not found.`;
     try {

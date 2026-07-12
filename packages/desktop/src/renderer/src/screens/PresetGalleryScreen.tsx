@@ -69,6 +69,11 @@ export function PresetGalleryScreen({ onBack, onOpenBuilder }: PresetGalleryScre
               <div>Agents: {preset.agents.length}</div>
             </div>
 
+            <div style={{ fontSize: 12, marginBottom: 16 }}>
+              <span style={{ color: 'var(--text-dim)' }}>Best for: </span>
+              {preset.bestFor}
+            </div>
+
             {preset.existingSpaceId ? (
               <button
                 className="btn"

@@ -13,6 +13,18 @@ export interface McpServerRow {
   created_at: number;
 }
 
+export interface WebhookRow {
+  id: string;
+  name: string;
+  description: string;
+  method: string;
+  url: string;
+  parameterized: number;
+  headers: string | null;
+  enabled: number;
+  created_at: number;
+}
+
 export interface SpaceRow {
   id: string;
   name: string;

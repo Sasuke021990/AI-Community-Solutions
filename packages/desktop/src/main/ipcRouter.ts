@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { Repositories, LmStudioClient, McpClientWrapper, Space, SpaceStatus, listRoleTemplates, listSpacePresets, SpacePreset } from '@acs/core';
+import { Repositories, LmStudioClient, McpClientWrapper, Space, SpaceStatus, listRoleTemplates, listSpacePresets, SpacePreset, fetchWebhook } from '@acs/core';
 import { Channels, IpcResult } from '../shared/ipc.js';
 import { RunManager } from './RunManager.js';
 import { SettingsStore } from './SettingsStore.js';
@@ -70,6 +70,35 @@ export function createIpcRouter(deps: IpcRouterDeps) {
       const input = Channels.mcpTest.requestSchema.parse(p);
       const client = new McpClientWrapper({ id: 'test', createdAt: Date.now(), ...input });
       return client.testConnection();
+    },
+
+    [Channels.webhooksList.name]: async () => repos.webhooks.list(),
+
+    [Channels.webhooksCreate.name]: async (p) => {
+      const input = Channels.webhooksCreate.requestSchema.parse(p);
+      const config = { id: randomUUID(), createdAt: Date.now(), ...input };
+      repos.webhooks.create(config);
+      return config;
+    },
+
+    [Channels.webhooksUpdate.name]: async (p) => {
+      const input = Channels.webhooksUpdate.requestSchema.parse(p);
+      const existing = repos.webhooks.list().find((w) => w.id === input.id);
+      if (!existing) throw new Error('Webhook not found');
+      repos.webhooks.update({ ...existing, ...input });
+      return undefined;
+    },
+
+    [Channels.webhooksDelete.name]: async (p) => {
+      const { id } = Channels.webhooksDelete.requestSchema.parse(p);
+      return repos.webhooks.delete(id);
+    },
+
+    [Channels.webhooksTest.name]: async (p) => {
+      const input = Channels.webhooksTest.requestSchema.parse(p);
+      const w = { id: 'test', createdAt: Date.now(), ...input };
+      const r = await fetchWebhook(w, input.parameterized ? 'test' : undefined);
+      return { ok: r.ok, status: r.status, snippet: r.body.slice(0, 500) };
     },
 
     [Channels.spacesList.name]: async () => repos.spaces.list().map(withActivity),

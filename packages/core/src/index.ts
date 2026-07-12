@@ -27,3 +27,6 @@ export * from './templates/roleTemplates.js';
 
 // Space presets
 export * from './presets/spacePresets.js';
+
+// Webhooks
+export * from './webhooks/WebhookClient.js';

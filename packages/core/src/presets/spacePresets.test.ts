@@ -14,6 +14,7 @@ describe('listSpacePresets', () => {
     const presets = listSpacePresets();
 
     for (const preset of presets) {
+      expect(preset.bestFor.length).toBeGreaterThan(0);
       const orchestrators = preset.agents.filter((a) => a.isOrchestrator);
 
       if (preset.strategy === Strategy.Orchestrator) {

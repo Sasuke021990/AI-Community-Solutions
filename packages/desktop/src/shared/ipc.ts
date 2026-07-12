@@ -70,6 +70,20 @@ function requireTransportFields<T extends z.infer<typeof McpServerBaseSchema>>(v
 export const McpServerInputSchema = McpServerBaseSchema.superRefine(requireTransportFields);
 export const McpServerUpdateSchema = McpServerBaseSchema.extend({ id: z.string().min(1) }).superRefine(requireTransportFields);
 
+// ---- Webhooks -----------------------------------------------------------------------
+
+const WebhookBaseSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().default(''),
+  method: z.enum(['GET', 'POST']),
+  url: z.string().url(),
+  parameterized: z.boolean().default(false),
+  headers: z.record(z.string()).optional(),
+  enabled: z.boolean().default(true)
+});
+export const WebhookInputSchema = WebhookBaseSchema;
+export const WebhookUpdateSchema = WebhookBaseSchema.extend({ id: z.string().min(1) });
+
 // ---- Spaces -------------------------------------------------------------------------
 
 export const SpaceInputSchema = z.object({
@@ -78,7 +92,8 @@ export const SpaceInputSchema = z.object({
   strategy: z.nativeEnum(Strategy),
   defaultModel: z.string().min(1),
   maxRounds: z.number().int().min(1).max(50),
-  allowedMcpServerIds: z.array(z.string()).optional()
+  allowedMcpServerIds: z.array(z.string()).optional(),
+  allowedWebhookIds: z.array(z.string()).optional()
 });
 export const SpaceUpdateSchema = SpaceInputSchema.extend({ id: z.string().min(1) });
 
@@ -126,6 +141,12 @@ export const Channels = {
   mcpUpdate: defineChannel('mcp:update', McpServerUpdateSchema),
   mcpDelete: defineChannel('mcp:delete', IdSchema),
   mcpTest: defineChannel('mcp:test', McpServerInputSchema),
+
+  webhooksList: defineChannel('webhooks:list', EmptySchema),
+  webhooksCreate: defineChannel('webhooks:create', WebhookInputSchema),
+  webhooksUpdate: defineChannel('webhooks:update', WebhookUpdateSchema),
+  webhooksDelete: defineChannel('webhooks:delete', IdSchema),
+  webhooksTest: defineChannel('webhooks:test', WebhookInputSchema),
 
   spacesList: defineChannel('spaces:list', EmptySchema),
   spacesGet: defineChannel('spaces:get', IdSchema),

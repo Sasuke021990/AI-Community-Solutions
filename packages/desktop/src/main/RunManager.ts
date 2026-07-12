@@ -46,6 +46,10 @@ export class RunManager {
       .filter((m) => m.enabled && (space.allowedMcpServerIds ?? []).includes(m.id));
     const mcpClients = mcpConfigs.map((c) => new McpClientWrapper(c));
 
+    const webhooks = this.repos.webhooks
+      .list()
+      .filter((w) => w.enabled && (space.allowedWebhookIds ?? []).includes(w.id));
+
     const run = {
       id: randomUUID(),
       spaceId,
@@ -62,6 +66,7 @@ export class RunManager {
       space,
       agents,
       mcpClients,
+      webhooks,
       this.repos.runs,
       this.repos.runEvents,
       this.getLmStudioClient(),
