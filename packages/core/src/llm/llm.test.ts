@@ -35,6 +35,41 @@ describe('ConcurrencyLimiter', () => {
     await expect(p).rejects.toThrow(/Aborted/);
     limiter.release(); // release first slot
   });
+
+  it('clamps setLimit to the [1, 8] range', () => {
+    const limiter = new ConcurrencyLimiter(2);
+
+    limiter.setLimit(20);
+    expect(limiter.getLimit()).toBe(8);
+
+    limiter.setLimit(0);
+    expect(limiter.getLimit()).toBe(1);
+
+    limiter.setLimit(-5);
+    expect(limiter.getLimit()).toBe(1);
+
+    limiter.setLimit(5);
+    expect(limiter.getLimit()).toBe(5);
+  });
+
+  it('raising the limit mid-run immediately drains queued waiters', async () => {
+    const limiter = new ConcurrencyLimiter(1);
+    await limiter.acquire(); // fills the only slot
+
+    let secondAcquired = false;
+    const p = limiter.acquire().then(() => { secondAcquired = true; });
+
+    // Still queued: limit is 1 and the slot is held.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(secondAcquired).toBe(false);
+
+    limiter.setLimit(2); // should drain the queue without a release()
+    await p;
+    expect(secondAcquired).toBe(true);
+
+    limiter.release();
+    limiter.release();
+  });
 });
 
 describe('LmStudioClient', () => {
