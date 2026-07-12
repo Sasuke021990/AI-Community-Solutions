@@ -34,6 +34,7 @@ export interface SpaceRow {
   max_rounds: number;
   status: string;
   preset_id: string | null;
+  temperature: number | null;
   created_at: number;
   updated_at: number;
 }

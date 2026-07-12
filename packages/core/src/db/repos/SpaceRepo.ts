@@ -15,11 +15,11 @@ export class SpaceRepo {
   public create(space: Space): void {
     this.db.transaction(() => {
       this.db.prepare(`
-        INSERT INTO spaces (id, name, description, strategy, default_model, max_rounds, status, preset_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO spaces (id, name, description, strategy, default_model, max_rounds, status, preset_id, temperature, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         space.id, space.name, space.description, space.strategy, space.defaultModel,
-        space.maxRounds, space.status, space.presetId ?? null, space.createdAt, space.updatedAt
+        space.maxRounds, space.status, space.presetId ?? null, space.temperature ?? null, space.createdAt, space.updatedAt
       );
 
       if (space.allowedMcpServerIds) {
@@ -50,10 +50,10 @@ export class SpaceRepo {
     this.db.transaction(() => {
       this.db.prepare(`
         UPDATE spaces
-        SET name = ?, description = ?, strategy = ?, default_model = ?, max_rounds = ?, updated_at = ?
+        SET name = ?, description = ?, strategy = ?, default_model = ?, max_rounds = ?, temperature = ?, updated_at = ?
         WHERE id = ?
       `).run(
-        space.name, space.description, space.strategy, space.defaultModel, space.maxRounds, space.updatedAt, space.id
+        space.name, space.description, space.strategy, space.defaultModel, space.maxRounds, space.temperature ?? null, space.updatedAt, space.id
       );
 
       if (space.allowedMcpServerIds) {
@@ -73,11 +73,11 @@ export class SpaceRepo {
 
     return this.db.transaction(() => {
       this.db.prepare(`
-        INSERT INTO spaces (id, name, description, strategy, default_model, max_rounds, status, preset_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+        INSERT INTO spaces (id, name, description, strategy, default_model, max_rounds, status, preset_id, temperature, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
       `).run(
         space.id, space.name, space.description, space.strategy, space.defaultModel,
-        space.maxRounds, space.status, space.createdAt, space.updatedAt
+        space.maxRounds, space.status, space.temperature ?? null, space.createdAt, space.updatedAt
       );
 
       for (const agent of agents) {
@@ -167,6 +167,7 @@ export class SpaceRepo {
       maxRounds: row.max_rounds,
       status: row.status as SpaceStatus,
       presetId: row.preset_id,
+      temperature: row.temperature ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       allowedMcpServerIds: this.getAllowedMcpServers(row.id),

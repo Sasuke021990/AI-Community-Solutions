@@ -14,6 +14,7 @@ const COLLAB_INSTRUCTIONS =
 
 // Cap on how many times a single agent turn may loop through tool calls.
 const MAX_TOOL_ITERATIONS = 5;
+const FREQUENCY_PENALTY = 0.3;
 
 /**
  * Builds the message list for an agent turn: identity + role prompt +
@@ -66,7 +67,9 @@ export async function callAgent(
           {
             model,
             messages: working,
-            tools: state.tools.length > 0 ? state.tools : undefined
+            tools: state.tools.length > 0 ? state.tools : undefined,
+            temperature: state.temperature,
+            frequency_penalty: FREQUENCY_PENALTY
           },
           (token) => state.onToken?.(agent.id, token),
           state.signal

@@ -59,6 +59,7 @@ export interface SpaceInput {
   strategy: Space['strategy'];
   defaultModel: string;
   maxRounds: number;
+  temperature?: number;
   allowedMcpServerIds?: string[];
   allowedWebhookIds?: string[];
 }

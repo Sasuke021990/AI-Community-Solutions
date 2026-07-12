@@ -20,6 +20,7 @@ export interface ChatRequest {
   messages: ChatMessage[];
   tools?: unknown[]; // OpenAI function schema
   temperature?: number;
+  frequency_penalty?: number;
 }
 
 export interface ChatResponse {

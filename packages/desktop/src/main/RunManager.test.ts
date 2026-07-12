@@ -132,6 +132,10 @@ describe('RunManager', () => {
     const run = repos.runs.get(runId);
     expect(run?.status).toBe(RunStatus.Completed);
     expect(run?.pdfPath).toBeUndefined(); // It failed, so no path was set
+    
+    // C2: A system event was emitted for the PDF failure
+    const pdfEvents = broadcasts.filter((b) => b.channel === RUN_EVENT_PUSH_CHANNEL && (b.payload as { type: string }).type === 'system');
+    expect(pdfEvents.some((b) => ((b.payload as { payload: { note: string } }).payload.note || '').includes('Report generation failed'))).toBe(true);
   });
 
   it('enforces one active run per Space at the manager level (bubbles up from RunRepo)', async () => {

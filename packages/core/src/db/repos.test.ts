@@ -45,6 +45,33 @@ describe('Database and Repositories Integration', () => {
     }).not.toThrow();
   });
 
+  it('SpaceRepo round-trips temperature; missing defaults to undefined', () => {
+    const spaceId1 = randomUUID();
+    spaceRepo.create({
+      id: spaceId1, name: 'T1', description: 'T1', strategy: Strategy.Orchestrator,
+      defaultModel: 'm1', maxRounds: 5, status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    
+    // Unset reads as undefined
+    const s1 = spaceRepo.get(spaceId1)!;
+    expect(s1.temperature).toBeUndefined();
+
+    const spaceId2 = randomUUID();
+    spaceRepo.create({
+      id: spaceId2, name: 'T2', description: 'T2', strategy: Strategy.Orchestrator,
+      defaultModel: 'm2', maxRounds: 5, temperature: 1.5, status: SpaceStatus.Draft, createdAt: Date.now(), updatedAt: Date.now()
+    });
+    
+    // Set reads back correctly
+    const s2 = spaceRepo.get(spaceId2)!;
+    expect(s2.temperature).toBe(1.5);
+    
+    // Update saves it
+    s2.temperature = 0.8;
+    spaceRepo.update(s2);
+    expect(spaceRepo.get(spaceId2)!.temperature).toBe(0.8);
+  });
+
   it('publish validation matrix', () => {
     const spaceId = randomUUID();
     spaceRepo.create({

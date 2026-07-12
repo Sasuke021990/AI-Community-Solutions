@@ -25,6 +25,7 @@ interface SpaceForm {
   strategy: Space['strategy'];
   defaultModel: string;
   maxRounds: number;
+  temperature?: number;
   allowedMcpServerIds: string[];
   allowedWebhookIds: string[];
 }
@@ -36,6 +37,7 @@ function toForm(space: Space): SpaceForm {
     strategy: space.strategy,
     defaultModel: space.defaultModel,
     maxRounds: space.maxRounds,
+    temperature: space.temperature,
     allowedMcpServerIds: space.allowedMcpServerIds ?? [],
     allowedWebhookIds: space.allowedWebhookIds ?? []
   };
@@ -47,6 +49,7 @@ const emptyForm: SpaceForm = {
   strategy: 'round-robin' as Space['strategy'],
   defaultModel: '',
   maxRounds: 8,
+  temperature: 0.2,
   allowedMcpServerIds: [],
   allowedWebhookIds: []
 };
@@ -405,6 +408,23 @@ export function SpaceBuilderScreen({ spaceId, onCreated, onOpenRun, onPublished,
               </div>
             )}
           </div>
+          <details>
+            <summary style={{ cursor: 'pointer', marginBottom: 12, fontWeight: 'bold' }}>Advanced</summary>
+            <div className="field">
+              <label>Temperature</label>
+              <input
+                type="number"
+                min={0}
+                max={2}
+                step={0.1}
+                value={form.temperature ?? 0.2}
+                onChange={(e) => setForm({ ...form, temperature: Number(e.target.value) })}
+              />
+              <div className="field-hint">
+                Lower = more focused & reliable (recommended 0.2–0.4). Higher = more creative but less likely to follow instructions.
+              </div>
+            </div>
+          </details>
           <div className="field">
             <label>Allowed MCP servers</label>
             <div className="checkbox-list">

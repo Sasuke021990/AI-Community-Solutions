@@ -19,8 +19,13 @@ export interface EngineEvent {
 }
 
 export interface ExecutionState {
+  /** The run being executed. */
   run: Run;
+  /** The space this run belongs to. */
   space: Space;
+  /** The temperature for the run, mapped from Space or default. */
+  temperature: number;
+  /** All agents in this space. */
   agents: Agent[];
   mcpClients: McpClientWrapper[];
   lmStudioClient: LmStudioClient;
@@ -37,5 +42,5 @@ export interface ExecutionState {
 }
 
 export interface AgentStrategy {
-  executeRound(state: ExecutionState): Promise<{ finalAnswer?: string }>;
+  executeRound(state: ExecutionState): Promise<{ finalAnswer?: string; halt?: boolean }>;
 }

@@ -97,6 +97,7 @@ export const SpaceInputSchema = z.object({
   strategy: z.nativeEnum(Strategy),
   defaultModel: z.string().min(1),
   maxRounds: z.number().int().min(1).max(50),
+  temperature: z.number().min(0).max(2).optional(),
   allowedMcpServerIds: z.array(z.string()).optional(),
   allowedWebhookIds: z.array(z.string()).optional()
 });

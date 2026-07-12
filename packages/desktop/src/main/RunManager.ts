@@ -7,6 +7,7 @@ import {
   RunOrchestrator,
   RunStatus,
   SpaceStatus,
+  RunEventType,
   PersistedRunEvent,
   RunReportHtml,
   renderRunReport
@@ -103,6 +104,15 @@ export class RunManager {
           } catch (e) {
             // Log only - a PDF failure must never turn a finished run into a failure.
             console.error('PDF generation failed:', e);
+            const msg = e instanceof Error ? e.message : String(e);
+            const event = this.repos.runEvents.append({
+              id: randomUUID(),
+              runId: finalRun.id,
+              type: RunEventType.System,
+              payload: { note: `Report generation failed: ${msg}` },
+              at: Date.now()
+            });
+            this.broadcast(RUN_EVENT_PUSH_CHANNEL, event);
           }
         }
         this.broadcast(RUN_STATUS_PUSH_CHANNEL, this.repos.runs.get(run.id));

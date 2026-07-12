@@ -262,9 +262,14 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
           )}
 
           {run.status !== 'running' && run.pdfPath && (
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn" onClick={() => call(window.acs.runs.openPdf(run.pdfPath!))}>Open PDF</button>
-              <button className="btn" onClick={() => call(window.acs.runs.showPdfInFolder(run.pdfPath!))}>Show in folder</button>
+            <div style={{ marginTop: 16 }}>
+              <div className="section-title" style={{ marginTop: 0, marginBottom: 8 }}>
+                Report (PDF)
+              </div>
+              <div className="row">
+                <button className="btn" onClick={() => call(window.acs.runs.openPdf(run.pdfPath!))}>Open PDF</button>
+                <button className="btn" onClick={() => call(window.acs.runs.showPdfInFolder(run.pdfPath!))}>Show in folder</button>
+              </div>
             </div>
           )}
         </>

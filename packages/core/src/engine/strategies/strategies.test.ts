@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LmStudioClient, ConcurrencyLimiter, ChatMessage, ChatRequest } from '../../llm/index.js';
-import { Strategy, SpaceStatus, RunStatus } from '../../domain/enums.js';
+import { Strategy, SpaceStatus, RunStatus, RunEventType } from '../../domain/enums.js';
 import { ExecutionState, EngineEvent } from './AgentStrategy.js';
 import { callAgent, buildAgentMessages } from './AgentCaller.js';
 import { RoundRobinStrategy } from './RoundRobinStrategy.js';
@@ -108,9 +108,19 @@ describe('AgentCaller tool loop', () => {
 });
 
 describe('parseTaskAssignments', () => {
-  it('extracts agent name + task from task tags', () => {
+  it('extracts agent name + task from task tags with double quotes', () => {
     const out = parseTaskAssignments(
       'plan: <task agent="Researcher">find sources</task> and <task agent="Writer">draft it</task>'
+    );
+    expect(out).toEqual([
+      { agentName: 'Researcher', task: 'find sources' },
+      { agentName: 'Writer', task: 'draft it' }
+    ]);
+  });
+
+  it('tolerates single quotes and whitespace around the equals sign', () => {
+    const out = parseTaskAssignments(
+      `plan: <task agent = 'Researcher'>find sources</task> and <task agent= 'Writer' >draft it</task>`
     );
     expect(out).toEqual([
       { agentName: 'Researcher', task: 'find sources' },
@@ -150,6 +160,57 @@ describe('OrchestratorStrategy', () => {
 
     const r2 = await strat.executeRound(state);
     expect(r2.finalAnswer).toBe('done');
+  });
+
+  it('no-progress guard: nudges on first offense, halts on second', async () => {
+    const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
+    const researcher = agent({ id: 'w1', name: 'Researcher' });
+    const state = makeState({ agents: [orchestrator, researcher] });
+
+    vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
+      message: { role: 'assistant', content: 'just narrating, no task blocks' }
+    });
+
+    const strat = new OrchestratorStrategy();
+    
+    // Round 1: no progress -> injected SYSTEM nudge
+    const r1 = await strat.executeRound(state);
+    expect(r1.finalAnswer).toBeUndefined();
+    expect(r1.halt).toBeUndefined();
+    expect(state.messages[state.messages.length - 1].content).toContain('SYSTEM: You neither delegated a subtask nor gave a final answer.');
+
+    // Round 2: no progress again -> halt
+    const r2 = await strat.executeRound(state);
+    expect(r2.halt).toBe(true);
+    // Should have emitted a System note event
+    const events = (state as unknown as { _events: EngineEvent[] })._events;
+    expect(events.some(e => e.type === RunEventType.System && (e.payload.note as string).includes('no progress'))).toBe(true);
+  });
+
+  it('duplicate detection: identical output twice triggers no-progress guard', async () => {
+    const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
+    const researcher = agent({ id: 'w1', name: 'Researcher' });
+    const state = makeState({ agents: [orchestrator, researcher] });
+
+    vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
+      message: { role: 'assistant', content: '<task agent="Researcher">do it</task>' }
+    });
+
+    const strat = new OrchestratorStrategy();
+    
+    // Round 1: valid delegation
+    const r1 = await strat.executeRound(state);
+    expect(r1.finalAnswer).toBeUndefined();
+    expect(r1.halt).toBeUndefined();
+
+    // Round 2: emits exactly the same delegation block
+    const r2 = await strat.executeRound(state);
+    expect(r2.halt).toBeUndefined(); // First duplicate = 1st offense (nudge)
+    expect(state.messages[state.messages.length - 1].content).toContain('SYSTEM: You neither delegated a subtask nor gave a final answer.');
+    
+    // Round 3: third identical output -> halt
+    const r3 = await strat.executeRound(state);
+    expect(r3.halt).toBe(true);
   });
 });
 

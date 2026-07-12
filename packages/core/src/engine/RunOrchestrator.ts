@@ -49,6 +49,7 @@ export class RunOrchestrator {
     this.state = {
       run,
       space,
+      temperature: space.temperature ?? 0.2,
       agents,
       mcpClients,
       lmStudioClient,
@@ -136,6 +137,7 @@ export class RunOrchestrator {
           finalAnswer = result.finalAnswer;
           break;
         }
+        if (result.halt) break;
       }
 
       if (finalAnswer === undefined) {
@@ -166,6 +168,22 @@ export class RunOrchestrator {
         this.runRepo.updateStatus(this.state.run.id, RunStatus.Stopped, Date.now());
       } else {
         const msg = e instanceof Error ? e.message : 'Unknown error';
+        const isTimeout = /timeout|stall/i.test(msg);
+        const hasPartial = this.state.messages.length > 0;
+        if (isTimeout && hasPartial) {
+          // Salvage: the model hung, but we have material. Give the user an answer.
+          try {
+            const partial = await this.synthesizeSafely();
+            if (partial) {
+              this.state.onEvent({
+                type: RunEventType.System,
+                payload: { note: `Model timed out (${msg}); returning a best-effort answer from the partial discussion.` }
+              });
+              this.runRepo.completeRun(this.state.run.id, partial);
+              return; // skip the failed path
+            }
+          } catch { /* fall through to failed */ }
+        }
         this.runRepo.updateStatus(this.state.run.id, RunStatus.Failed, Date.now(), msg);
       }
     } finally {
@@ -265,7 +283,7 @@ export class RunOrchestrator {
     const res = await this.state.concurrencyLimiter.run(
       () =>
         this.state.lmStudioClient.chat(
-          { model: this.state.space.defaultModel, messages },
+          { model: this.state.space.defaultModel, messages, temperature: this.state.temperature },
           () => {},
           this.abortController.signal
         ),
@@ -274,6 +292,27 @@ export class RunOrchestrator {
 
     const m = res.message.content.match(/<final_answer>([\s\S]*?)<\/final_answer>/);
     return (m ? m[1] : res.message.content).trim();
+  }
+
+  /** Wraps synthesize() to use a fresh signal so it can run after the main run aborted. */
+  private async synthesizeSafely(): Promise<string | undefined> {
+    const originalSignal = this.abortController.signal;
+    const safeController = new AbortController();
+    
+    // Temporarily replace the abort controller for this specific call,
+    // so it doesn't immediately fail due to the outer run being aborted.
+    const originalLimiter = this.state.concurrencyLimiter;
+    this.state.concurrencyLimiter = new ConcurrencyLimiter(1);
+    this.abortController = safeController;
+    
+    try {
+      return await this.synthesize();
+    } catch {
+      return undefined;
+    } finally {
+      this.abortController = { signal: originalSignal, abort: () => {} } as AbortController;
+      this.state.concurrencyLimiter = originalLimiter;
+    }
   }
 
   /** Manually stop this run (and only this run). */

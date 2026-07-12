@@ -35,6 +35,18 @@ describe('SpaceInputSchema', () => {
       SpaceInputSchema.parse({ name: 'S', strategy: 'not-a-strategy', defaultModel: 'm', maxRounds: 5 })
     ).toThrow();
   });
+
+  it('accepts valid temperature and rejects out-of-range', () => {
+    expect(
+      SpaceInputSchema.parse({ name: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5, temperature: 0.5 }).temperature
+    ).toBe(0.5);
+    expect(() =>
+      SpaceInputSchema.parse({ name: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5, temperature: -0.1 })
+    ).toThrow();
+    expect(() =>
+      SpaceInputSchema.parse({ name: 'S', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5, temperature: 2.1 })
+    ).toThrow();
+  });
 });
 
 describe('AgentInputSchema', () => {

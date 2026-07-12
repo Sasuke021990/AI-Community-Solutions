@@ -252,6 +252,9 @@ describe('RunOrchestrator', () => {
         // sibling call inside the orchestrator's concurrent dispatch.
         return Promise.reject(new Error('Model stall timeout: no tokens received for 60000ms.'));
       }
+      if (sys.includes('synthesis assistant')) {
+        return Promise.resolve({ message: { role: 'assistant', content: '<final_answer>salvaged</final_answer>' } });
+      }
       // Worker B hangs until its shared abort signal fires - proving the
       // run-level failure actually cancels it instead of leaving it running
       // in the background against LM Studio.
@@ -283,7 +286,7 @@ describe('RunOrchestrator', () => {
     await engine.start();
 
     expect(workerBSawAbort).toBe(true);
-    expect(runRepo.get('r1')?.status).toBe(RunStatus.Failed);
+    expect(runRepo.get('r1')?.status).toBe(RunStatus.Completed);
   });
 
   it('manual stop marks only this run stopped and never touches other runs', async () => {
@@ -320,5 +323,60 @@ describe('RunOrchestrator', () => {
     expect(runRepo.get('rb')?.status).toBe(RunStatus.Running); // untouched
     // partial transcript preserved (a RoundStart event was recorded)
     expect(eventRepo.listByRun('ra').length).toBeGreaterThan(0);
+  });
+
+  it('salvages a partial transcript into a completed answer on model timeout', async () => {
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+
+    let call = 0;
+    vi.spyOn(lmClient, 'chat').mockImplementation(async () => {
+      call++;
+      if (call === 1) {
+        return { message: { role: 'assistant', content: 'partial discussion...' } };
+      }
+      if (call === 2) {
+        throw new Error('stall timeout: no tokens');
+      }
+      // synthesize safely happens
+      return { message: { role: 'assistant', content: 'salvaged answer' } };
+    });
+
+    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    spaceRepo.create(space);
+    runRepo.create(run);
+
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter(1));
+    await engine.start();
+
+    const finalRun = runRepo.get('r1');
+    expect(finalRun?.status).toBe(RunStatus.Completed);
+    expect(finalRun?.finalAnswer).toBe('salvaged answer');
+  });
+
+  it('threads temperature and frequency_penalty from space through RunOrchestrator to LmStudioClient', async () => {
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+
+    let capturedReq: import('../llm/types.js').ChatRequest | undefined;
+    vi.spyOn(lmClient, 'chat').mockImplementation(async (req) => {
+      capturedReq = req;
+      return { message: { role: 'assistant', content: '<final_answer>done</final_answer>' } };
+    });
+
+    const space = mkSpace({ temperature: 0.8 }); // explicitly set temperature
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: true, position: 1 }];
+    spaceRepo.create(space);
+    runRepo.create(run);
+
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter(1));
+    await engine.start();
+
+    expect(capturedReq).toBeDefined();
+    expect(capturedReq.temperature).toBe(0.8);
+    expect(capturedReq.frequency_penalty).toBe(0.3);
   });
 });

@@ -33,6 +33,7 @@ export interface Space {
   maxRounds: number;
   status: SpaceStatus;
   presetId?: string | null;
+  temperature?: number;
   createdAt: number;
   updatedAt: number;
   agents?: Agent[];
