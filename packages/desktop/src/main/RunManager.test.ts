@@ -19,7 +19,7 @@ import { RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL, RUN_TOKEN_PUSH_CHANNEL
 function mkSpace(over: Partial<Space> = {}): Space {
   return {
     id: 's1', name: 'S', description: '', strategy: Strategy.RoundRobin, defaultModel: 'm',
-    maxRounds: 3, status: SpaceStatus.Published, createdAt: 0, updatedAt: 0, ...over
+    maxRounds: 1, status: SpaceStatus.Published, createdAt: 0, updatedAt: 0, ...over
   };
 }
 

@@ -104,7 +104,12 @@ export function renderRunReport(input: RunReportInput): RunReportHtml {
       const agent = agents.find(a => a.id === ev.agentId);
       const role = agent ? agent.role : 'Unknown Agent';
       const isManager = agent?.isOrchestrator;
-      bodyHtml += `<div class="card"><div class="card-header">${escapeHtml(role)}${isManager ? '<span class="manager-tag">Manager</span>' : ''}</div>`;
+      const payload = ev.payload as { model?: string; phase?: string; cycle?: number; totalCycles?: number };
+      let suffix = '';
+      if (payload.totalCycles && payload.totalCycles > 1) {
+        suffix = ` <span style="font-weight: normal; color: #64748b; font-size: 10pt;">&mdash; Cycle ${payload.cycle}/${payload.totalCycles} &middot; ${escapeHtml(payload.phase || '')}</span>`;
+      }
+      bodyHtml += `<div class="card"><div class="card-header">${escapeHtml(role)}${isManager ? '<span class="manager-tag">Manager</span>' : ''}${suffix}</div>`;
       inCard = true;
     } else if (ev.type === RunEventType.AgentMessage) {
       if (!inCard) { bodyHtml += `<div class="card">`; inCard = true; }

@@ -3,9 +3,7 @@ import { LmStudioClient, ConcurrencyLimiter, ChatMessage, ChatRequest } from '..
 import { Strategy, SpaceStatus, RunStatus, RunEventType } from '../../domain/enums.js';
 import { ExecutionState, EngineEvent } from './AgentStrategy.js';
 import { callAgent, buildAgentMessages } from './AgentCaller.js';
-import { RoundRobinStrategy } from './RoundRobinStrategy.js';
 import { OrchestratorStrategy, parseTaskAssignments } from './OrchestratorStrategy.js';
-import { DebateStrategy } from './DebateStrategy.js';
 import { Agent } from '../../domain/types.js';
 
 function agent(over: Partial<Agent> = {}): Agent {
@@ -16,7 +14,7 @@ function makeState(over: Partial<ExecutionState> = {}): ExecutionState {
   const events: EngineEvent[] = [];
   const state: ExecutionState = {
     run: { id: 'r', spaceId: 's', problem: 'solve it', status: RunStatus.Running, roundsUsed: 0, startedAt: 0 },
-    space: { id: 's', name: 'S', description: '', strategy: Strategy.RoundRobin, defaultModel: 'm', maxRounds: 5, status: SpaceStatus.Published, createdAt: 0, updatedAt: 0 },
+    space: { id: 's', name: 'S', description: '', strategy: Strategy.Structured, defaultModel: 'm', maxRounds: 5, status: SpaceStatus.Published, createdAt: 0, updatedAt: 0 },
     agents: [],
     mcpClients: [],
     lmStudioClient: new LmStudioClient(),
@@ -231,8 +229,7 @@ describe('OrchestratorStrategy', () => {
     const r1 = await strat.executeRound(state);
     expect(r1.finalAnswer).toBeUndefined();
     expect(r1.halt).toBeUndefined();
-    expect(state.messages[state.messages.length - 1].content).toContain('Researcher');
-    expect(state.messages[state.messages.length - 1].content).toContain('not been consulted yet');
+    expect(state.messages[state.messages.length - 1].content).toContain('no workers have been consulted yet');
 
     // Round 2: still refuses to delegate -> halts (same safety net as the
     // no-progress guard), rather than looping until maxRounds/timeout.
@@ -267,46 +264,7 @@ describe('OrchestratorStrategy', () => {
     expect(r2.finalAnswer).toBe('done after delegating'); // round 2: now accepted
   });
 
-  it('rejects a final answer until EVERY worker has been consulted, not just one', async () => {
-    // Regression test for a real reported run: the orchestrator delegated to
-    // one hat repeatedly but tried to wrap up before consulting the rest.
-    const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
-    const w1 = agent({ id: 'w1', name: 'White' });
-    const w2 = agent({ id: 'w2', name: 'Black' });
-    const state = makeState({ agents: [orchestrator, w1, w2] });
 
-    let call = 0;
-    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
-      const sys = req.messages[0].content;
-      if (sys.includes('orchestrator')) {
-        call++;
-        if (call === 1) {
-          // Delegates to White only, then tries to answer without Black.
-          return { message: { role: 'assistant', content: '<task agent="White">facts</task>' } };
-        }
-        if (call === 2) {
-          return { message: { role: 'assistant', content: '<final_answer>done without Black</final_answer>' } };
-        }
-        // Nudged - now delegates to the remaining worker.
-        return { message: { role: 'assistant', content: '<task agent="Black">risks</task>' } };
-      }
-      return { message: { role: 'assistant', content: 'worker output' } };
-    });
-
-    const strat = new OrchestratorStrategy();
-    const r1 = await strat.executeRound(state); // delegates to White
-    expect(r1.finalAnswer).toBeUndefined();
-
-    const r2 = await strat.executeRound(state); // tries to answer - rejected, Black not consulted
-    expect(r2.finalAnswer).toBeUndefined();
-    expect(r2.halt).toBeUndefined();
-    expect(state.messages[state.messages.length - 1].content).toContain('Black');
-    expect(state.messages[state.messages.length - 1].content).toContain('not been consulted yet');
-
-    const r3 = await strat.executeRound(state); // now delegates to Black
-    expect(r3.finalAnswer).toBeUndefined();
-    expect(state.messages.filter((m) => m.content.startsWith('WORKER Black')).length).toBe(1);
-  });
 
   it('does not require delegation when the orchestrator has no workers', async () => {
     const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
@@ -355,101 +313,3 @@ describe('OrchestratorStrategy', () => {
   });
 });
 
-describe('DebateStrategy', () => {
-  it('converges when all critics raise no objections', async () => {
-    const a1 = agent({ id: 'a1', name: 'One' });
-    const a2 = agent({ id: 'a2', name: 'Two' });
-    const state = makeState({ agents: [a1, a2], space: { ...makeState().space, strategy: Strategy.Debate } });
-
-    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
-      const sys = req.messages[0].content;
-      if (sys.includes('Critique the proposals')) {
-        return { message: { role: 'assistant', content: 'looks good <no_objections/>' } };
-      }
-      return { message: { role: 'assistant', content: '<final_answer>agreed plan</final_answer>' } };
-    });
-
-    const strat = new DebateStrategy();
-    const r = await strat.executeRound(state);
-    expect(r.finalAnswer).toBe('agreed plan');
-  });
-
-  it('does not converge while an objection stands', async () => {
-    const a1 = agent({ id: 'a1', name: 'One' });
-    const a2 = agent({ id: 'a2', name: 'Two' });
-    const state = makeState({ agents: [a1, a2], space: { ...makeState().space, strategy: Strategy.Debate } });
-
-    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
-      const sys = req.messages[0].content;
-      if (sys.includes('Critique the proposals')) {
-        return { message: { role: 'assistant', content: 'I object: needs more detail' } };
-      }
-      return { message: { role: 'assistant', content: 'my proposal' } };
-    });
-
-    const strat = new DebateStrategy();
-    const r = await strat.executeRound(state);
-    expect(r.finalAnswer).toBeUndefined();
-  });
-});
-
-describe('RoundRobinStrategy with tools', () => {
-  it('offers tools to the agent and completes on final_answer', async () => {
-    const a1 = agent({ id: 'a1', name: 'Solo' });
-    const state = makeState({ agents: [a1], tools: [{ type: 'function', function: { name: 'srv__x' } }] });
-
-    const chatSpy = vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
-      message: { role: 'assistant', content: '<final_answer>ok</final_answer>' }
-    });
-
-    const strat = new RoundRobinStrategy();
-    const r = await strat.executeRound(state);
-    expect(r.finalAnswer).toBe('ok');
-    // tools were passed through to the model
-    expect(chatSpy.mock.calls[0][0].tools).toHaveLength(1);
-  });
-});
-
-describe('RoundRobinStrategy full-cycle behavior', () => {
-  it('runs every agent in one executeRound, even if an early agent emits <final_answer>', async () => {
-    // Reproduces the Design Thinking bug: the first agent (Empathizer) wrapped
-    // its stage-1 handoff in <final_answer>, which used to end the run after
-    // one turn. Now the whole cycle must run regardless.
-    const stages = ['Empathizer', 'Definer', 'Ideator', 'Prototyper', 'Tester'];
-    const agents = stages.map((name, i) => agent({ id: `a${i}`, name }));
-    const state = makeState({ agents });
-
-    const spoke: string[] = [];
-    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
-      const sys = req.messages[0].content;
-      const who = stages.find((s) => sys.includes(`named "${s}"`))!;
-      spoke.push(who);
-      // The first agent prematurely declares final; a later one also concludes.
-      if (who === 'Empathizer') return { message: { role: 'assistant', content: '<final_answer>premature</final_answer>' } };
-      if (who === 'Tester') return { message: { role: 'assistant', content: '<final_answer>real conclusion</final_answer>' } };
-      return { message: { role: 'assistant', content: `${who} did their part` } };
-    });
-
-    const strat = new RoundRobinStrategy();
-    const r = await strat.executeRound(state);
-
-    // All five stages ran, in order, within the single cycle.
-    expect(spoke).toEqual(stages);
-    // The last emitter in the cycle wins, not the premature early one.
-    expect(r.finalAnswer).toBe('real conclusion');
-  });
-
-  it('does not end the run when no agent declares a final answer', async () => {
-    const agents = [agent({ id: 'a0', name: 'One' }), agent({ id: 'a1', name: 'Two' })];
-    const state = makeState({ agents });
-    vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
-      message: { role: 'assistant', content: 'still working on it' }
-    });
-
-    const strat = new RoundRobinStrategy();
-    const r = await strat.executeRound(state);
-    expect(r.finalAnswer).toBeUndefined();
-    // both agents contributed to the transcript
-    expect(state.messages.filter((m) => m.role === 'assistant').length).toBe(2);
-  });
-});

@@ -18,8 +18,8 @@ describe('listSpacePresets', () => {
       expect(preset.bestFor.length).toBeGreaterThan(0);
       const orchestrators = preset.agents.filter((a) => a.isOrchestrator);
 
-      if (preset.strategy === Strategy.Orchestrator) {
-        expect(orchestrators).toHaveLength(1);
+      if (preset.strategy === Strategy.Orchestrator || preset.strategy === Strategy.Structured) {
+        expect(orchestrators.length).toBeLessThanOrEqual(1);
       } else {
         expect(orchestrators).toHaveLength(0);
       }
@@ -38,15 +38,40 @@ describe('listSpacePresets', () => {
     }
   });
 
-  it('orchestrator prompts do not contain prose delegation examples that conflict with engine task tags', () => {
+  it('no preset uses the retired Orchestrator strategy (all converted to structured)', () => {
     const presets = listSpacePresets();
     for (const preset of presets) {
-      if (preset.strategy === Strategy.Orchestrator) {
-        const orch = preset.agents.find((a) => a.isOrchestrator)!;
-        expect(orch.systemPrompt).not.toMatch(/process directions/i);
-        expect(orch.systemPrompt).not.toMatch(/Brief process directives/i);
-        expect(orch.systemPrompt).not.toMatch(/Brief directives to specific agents and summaries of progress\./i);
-      }
+      expect(preset.strategy).not.toBe(Strategy.Orchestrator);
+    }
+  });
+
+  it('structured framer prompts do not describe real-time delegation the engine no longer performs', () => {
+    // Regression guard: a structured framer speaks exactly twice (open, then
+    // synthesize) - it never sees a hat's output mid-session and can't
+    // "decide who's next" or "ask X to do Y", since the code (not the
+    // framer) drives the sequence. A prompt that still describes live
+    // delegation misleads the model about what it can actually do.
+    const presets = listSpacePresets();
+    for (const preset of presets) {
+      const framer = preset.agents.find((a) => a.isOrchestrator);
+      if (!framer) continue;
+      expect(framer.systemPrompt).not.toMatch(/decide which .*(is needed next|goes next)/i);
+      expect(framer.systemPrompt).not.toMatch(/task them explicitly/i);
+      expect(framer.systemPrompt).not.toMatch(/^(ask|delegate) the .*(to|closing)/im);
+      expect(framer.systemPrompt).not.toMatch(/repeat until/i);
+    }
+  });
+
+  it('maxRounds=1 for every single-pass linear preset (no framer-with-repeat presets exist)', () => {
+    // Regression guard for the specific bug found in review: a linear
+    // preset (one pass through all workers, optionally framed/synthesized)
+    // left at a stale maxRounds > 1 silently re-runs the WHOLE worker
+    // sequence that many times under StructuredStrategy's cycle loop.
+    const LINEAR_SINGLE_PASS = ['six-thinking-hats', 'triz', 'means-end-analysis', 'design-thinking', 'the-core-framework'];
+    const presets = listSpacePresets();
+    for (const id of LINEAR_SINGLE_PASS) {
+      const preset = presets.find((p) => p.id === id)!;
+      expect(preset.maxRounds).toBe(1);
     }
   });
 });

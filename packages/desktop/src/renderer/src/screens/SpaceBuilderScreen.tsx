@@ -6,6 +6,7 @@ import { StatusBadge } from '../components/StatusBadge.js';
 import { AgentEditor } from '../components/AgentEditor.js';
 
 const STRATEGIES: { value: Space['strategy']; label: string; hint: string }[] = [
+  { value: 'structured' as Space['strategy'], label: 'Structured pipeline', hint: 'Agents run in a fixed, code-guaranteed order (optionally repeating). No LLM decides who goes next.' },
   { value: 'orchestrator' as Space['strategy'], label: 'Orchestrator', hint: 'One agent plans and delegates subtasks to the others, then reviews results.' },
   { value: 'round-robin' as Space['strategy'], label: 'Round robin', hint: 'Agents take turns contributing, each seeing the discussion so far.' },
   { value: 'debate' as Space['strategy'], label: 'Debate', hint: 'Agents propose solutions, then critique each other until no objections remain.' }

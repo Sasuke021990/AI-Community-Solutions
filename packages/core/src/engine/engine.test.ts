@@ -52,9 +52,9 @@ describe('RunOrchestrator', () => {
       return { message: { role: 'assistant', content: '<final_answer>done</final_answer>' } };
     });
 
-    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const space = mkSpace({ strategy: Strategy.Orchestrator });
     const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
-    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: true, position: 1 }];
     const webhooks = [{
       id: 'w1', name: 'News', description: 'Fetches news', method: 'GET' as const, url: 'http://example.com/news',
       parameterized: true, enabled: true, createdAt: 0
@@ -117,9 +117,9 @@ describe('RunOrchestrator', () => {
     vi.spyOn(lmClient, 'listModels').mockResolvedValue(['some-other-model']);
     const chatSpy = vi.spyOn(lmClient, 'chat');
 
-    const space = mkSpace({ strategy: Strategy.RoundRobin, defaultModel: 'm' });
+    const space = mkSpace({ strategy: Strategy.Orchestrator, defaultModel: 'm' });
     const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
-    const agents = [{ id: 'a1', spaceId: 's1', name: 'Researcher', role: 'R', systemPrompt: 'R', isOrchestrator: false, position: 1 }];
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'Researcher', role: 'R', systemPrompt: 'R', isOrchestrator: true, position: 1 }];
 
     spaceRepo.create(space);
     runRepo.create(run);
@@ -143,9 +143,9 @@ describe('RunOrchestrator', () => {
       return { message: { role: 'assistant', content: isSynthesis ? 'BEST EFFORT ANSWER' : 'still thinking...' } };
     });
 
-    const space = mkSpace({ strategy: Strategy.RoundRobin, maxRounds: 2 });
+    const space = mkSpace({ strategy: Strategy.Orchestrator, maxRounds: 2 });
     const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
-    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: true, position: 1 }];
 
     spaceRepo.create(space);
     runRepo.create(run);
@@ -167,9 +167,9 @@ describe('RunOrchestrator', () => {
       message: { role: 'assistant', content: '<final_answer>hi</final_answer>' }
     });
 
-    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const space = mkSpace({ strategy: Strategy.Orchestrator });
     const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
-    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: true, position: 1 }];
     spaceRepo.create(space);
     runRepo.create(run);
 
@@ -194,9 +194,9 @@ describe('RunOrchestrator', () => {
       return { message: { role: 'assistant', content: '<final_answer>hi</final_answer>' } };
     });
 
-    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const space = mkSpace({ strategy: Strategy.Orchestrator });
     const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
-    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: true, position: 1 }];
     spaceRepo.create(space);
     runRepo.create(run);
 
@@ -221,9 +221,9 @@ describe('RunOrchestrator', () => {
       return { message: { role: 'assistant', content: '<final_answer>hi</final_answer>' } };
     });
 
-    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const space = mkSpace({ strategy: Strategy.Orchestrator });
     const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
-    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: true, position: 1 }];
     spaceRepo.create(space);
     runRepo.create(run);
 
@@ -301,8 +301,8 @@ describe('RunOrchestrator', () => {
         })
     );
 
-    const spaceA = mkSpace({ id: 'sa', strategy: Strategy.RoundRobin });
-    const spaceB = mkSpace({ id: 'sb', strategy: Strategy.RoundRobin });
+    const spaceA = mkSpace({ id: 'sa', strategy: Strategy.Orchestrator });
+    const spaceB = mkSpace({ id: 'sb', strategy: Strategy.Orchestrator });
     spaceRepo.create(spaceA);
     spaceRepo.create(spaceB);
 
@@ -311,7 +311,7 @@ describe('RunOrchestrator', () => {
     runRepo.create(runA);
     runRepo.create(runB); // unrelated run in another space, still running
 
-    const agents = [{ id: 'a1', spaceId: 'sa', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    const agents = [{ id: 'a1', spaceId: 'sa', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: true, position: 1 }];
     const engine = new RunOrchestrator(runA, spaceA, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
 
     const p = engine.start();
@@ -342,9 +342,9 @@ describe('RunOrchestrator', () => {
       return { message: { role: 'assistant', content: 'salvaged answer' } };
     });
 
-    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const space = mkSpace({ strategy: Strategy.Orchestrator });
     const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
-    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: true, position: 1 }];
     spaceRepo.create(space);
     runRepo.create(run);
 
@@ -418,5 +418,33 @@ describe('RunOrchestrator', () => {
     expect(workersCalled.size).toBeGreaterThan(0);
     const updated = runRepo.get('r1');
     expect(updated?.status).toBe(RunStatus.Completed);
+  });
+
+  it('runs a structured Space to completion with every agent participating and no tags', async () => {
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+    const ran = new Set<string>();
+    vi.spyOn(lmClient, 'chat').mockImplementation(async (req) => {
+      const name = req.messages[0].content.match(/named "(\w+)"/)?.[1] ?? '?';
+      ran.add(name);
+      return { message: { role: 'assistant', content: `text from ${name}` } }; // NB: never emits <final_answer>
+    });
+
+    const space = mkSpace({ strategy: Strategy.Structured, maxRounds: 1, presetId: undefined });
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [
+      { id: 'o', spaceId: 's1', name: 'Lead', role: 'Lead', systemPrompt: 'L', isOrchestrator: true, position: 0 },
+      { id: 'w1', spaceId: 's1', name: 'Alpha', role: 'Alpha', systemPrompt: 'A', isOrchestrator: false, position: 1 },
+      { id: 'w2', spaceId: 's1', name: 'Beta', role: 'Beta', systemPrompt: 'B', isOrchestrator: false, position: 2 }
+    ];
+    spaceRepo.create(space); runRepo.create(run);
+
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter(1));
+    await engine.start();
+
+    expect(ran.has('Alpha')).toBe(true);
+    expect(ran.has('Beta')).toBe(true);   // no agent skipped
+    expect(runRepo.get('r1')?.status).toBe(RunStatus.Completed);
+    expect(runRepo.get('r1')?.finalAnswer).toBeTruthy(); // completed with no tag anywhere
   });
 });

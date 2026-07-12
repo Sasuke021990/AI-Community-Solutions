@@ -24,6 +24,9 @@ interface ChatMessagePayload {
 interface Turn {
   agentId?: string;
   model?: string;
+  phase?: string;
+  cycle?: number;
+  totalCycles?: number;
   message?: ChatMessagePayload;
   toolCalls: { id: string; name: string; args: string; result?: string }[];
 }
@@ -41,8 +44,12 @@ function buildFeed(events: RunEvent[]): FeedItem[] {
 
   for (const e of events) {
     if (e.type === 'round_start') {
-      const payload = e.payload as { model?: string };
-      const turn: Turn = { agentId: e.agentId, model: payload.model, toolCalls: [] };
+      const payload = e.payload as { model?: string; phase?: string; cycle?: number; totalCycles?: number };
+      const turn: Turn = { 
+        agentId: e.agentId, model: payload.model, 
+        phase: payload.phase, cycle: payload.cycle, totalCycles: payload.totalCycles, 
+        toolCalls: [] 
+      };
       if (e.agentId) turnByAgent.set(e.agentId, turn);
       items.push({ kind: 'turn', turn, seq: e.seq });
     } else if (e.type === 'agent_message') {
@@ -127,6 +134,9 @@ export function RunFeed({ events, agents, live, streamingByAgent, streamingVersi
                 <div className="feed-turn-header">
                   <span className="agent-dot" />
                   <strong>{agentName(agentId)}</strong>
+                  {item.turn!.totalCycles && item.turn!.totalCycles > 1 && (
+                    <span>· Cycle {item.turn!.cycle}/{item.turn!.totalCycles} · {item.turn!.phase}</span>
+                  )}
                   {item.turn!.model && <span>· {item.turn!.model}</span>}
                   {live && !item.turn!.message && !streaming && <span className="loading-dots">thinking</span>}
                 </div>

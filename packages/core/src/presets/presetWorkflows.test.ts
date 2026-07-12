@@ -48,9 +48,21 @@ describe('Preset Workflows Dynamic Validation', () => {
           const isOrchestrator = (orchestratorPrompt && sys.includes(orchestratorPrompt)) || sys.includes('You are the orchestrator');
           
           let content = '';
-          if (preset.strategy === Strategy.Orchestrator && isOrchestrator) {
+          if (preset.strategy === Strategy.Structured) {
+            // StructuredStrategy handles sequences, cycles, parallel itself.
+            // If it's a parallel critique phase (debate shape), output no_objections.
+            if (sys.includes('CRITIQUE_PHASE') || lastMsg.includes('Critique')) {
+              content = '<no_objections/> WORKER';
+            } else if (isOrchestrator) {
+              // The synthesizer needs to end it
+              content = 'Synth done. WORKER';
+            } else {
+              // Just a standard worker
+              content = 'Worker result. WORKER';
+            }
+          } else if (preset.strategy === Strategy.Orchestrator && isOrchestrator) {
             // Check if it's the second round to emit final_answer
-            const hasWorkerResponses = req.messages.some(m => m.content.includes('WORKER'));
+            const hasWorkerResponses = req.messages.some(m => typeof m.content === 'string' && m.content.includes('WORKER'));
             if (hasWorkerResponses) {
               content = '<final_answer>Done!</final_answer>';
             } else {
@@ -60,7 +72,6 @@ describe('Preset Workflows Dynamic Validation', () => {
             }
           } else if (preset.strategy === Strategy.RoundRobin) {
             // RoundRobin: Just output some text. If it's the last agent in the 2nd cycle, end it.
-            // (We'll just let it run to maxRounds to test it safely, or emit final_answer).
             if (req.messages.length > 5) { // Arbitrary condition for "enough rounds"
               content = '<final_answer>Done!</final_answer>';
             } else {

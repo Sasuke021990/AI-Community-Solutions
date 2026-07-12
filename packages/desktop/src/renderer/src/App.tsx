@@ -7,6 +7,8 @@ import { RunScreen } from './screens/RunScreen.js';
 import { RunHistoryScreen } from './screens/RunHistoryScreen.js';
 import { McpRegistryScreen } from './screens/McpRegistryScreen.js';
 import { SettingsScreen } from './screens/SettingsScreen.js';
+import { NewSpaceChooserScreen } from './screens/NewSpaceChooserScreen.js';
+import { PipelineBuilderScreen } from './screens/PipelineBuilderScreen.js';
 
 const TOP_LEVEL_NAV: { key: 'spaces' | 'mcp' | 'settings'; label: string; view: View }[] = [
   { key: 'spaces', label: 'Spaces', view: { name: 'spaces' } },
@@ -25,6 +27,7 @@ function App() {
         <SpacesHomeScreen
           onOpenPresets={() => setView({ name: 'presets' })}
           onOpenBuilder={(spaceId) => setView({ name: 'builder', spaceId })}
+          onNewSpace={() => setView({ name: 'newSpaceChooser' })}
           onOpenRun={(spaceId) => setView({ name: 'run', spaceId })}
         />
       );
@@ -65,6 +68,23 @@ function App() {
       break;
     case 'settings':
       content = <SettingsScreen />;
+      break;
+    case 'newSpaceChooser':
+      content = (
+        <NewSpaceChooserScreen
+          onSelectPipeline={() => setView({ name: 'pipeline' })}
+          onSelectCustom={() => setView({ name: 'builder', spaceId: null })}
+          onBack={() => setView({ name: 'spaces' })}
+        />
+      );
+      break;
+    case 'pipeline':
+      content = (
+        <PipelineBuilderScreen
+          onDone={(id) => setView({ name: 'run', spaceId: id })}
+          onBack={() => setView({ name: 'spaces' })}
+        />
+      );
       break;
   }
 

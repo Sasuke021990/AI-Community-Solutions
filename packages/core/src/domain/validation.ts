@@ -22,6 +22,14 @@ export function validateSpaceForPublish(space: Space, agents: Agent[]): Validati
         message: 'Orchestrator strategy requires exactly one agent designated as the orchestrator.' 
       });
     }
+  } else if (space.strategy === Strategy.Structured) {
+    const workers = agents.filter((a) => !a.isOrchestrator);
+    if (orchestrators.length > 1) {
+      issues.push({ field: 'strategy', message: 'A structured Space may have at most one framer/synthesizer agent.' });
+    }
+    if (workers.length === 0) {
+      issues.push({ field: 'strategy', message: 'A structured Space needs at least one non-framer agent.' });
+    }
   } else {
     if (orchestrators.length > 0) {
       issues.push({

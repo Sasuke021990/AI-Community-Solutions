@@ -6,8 +6,8 @@ import { McpClientWrapper } from '../mcp/McpClient.js';
 import {
   AgentStrategy,
   OrchestratorStrategy,
-  RoundRobinStrategy,
-  DebateStrategy,
+  StructuredStrategy,
+  deriveStructuredShape,
   ExecutionState
 } from './strategies/index.js';
 import { fetchWebhook } from '../webhooks/WebhookClient.js';
@@ -44,7 +44,7 @@ export class RunOrchestrator {
     lmStudioClient: LmStudioClient,
     concurrencyLimiter: ConcurrencyLimiter
   ) {
-    this.strategy = this.createStrategy(space.strategy);
+    this.strategy = this.createStrategy(space, agents);
 
     this.state = {
       run,
@@ -98,16 +98,16 @@ export class RunOrchestrator {
     return () => this.tokenListeners.delete(cb);
   }
 
-  private createStrategy(type: Strategy): AgentStrategy {
-    switch (type) {
+  private createStrategy(space: Space, agents: Agent[]): AgentStrategy {
+    switch (space.strategy) {
       case Strategy.Orchestrator:
         return new OrchestratorStrategy();
       case Strategy.RoundRobin:
-        return new RoundRobinStrategy();
       case Strategy.Debate:
-        return new DebateStrategy();
+      case Strategy.Structured:
+        return new StructuredStrategy(deriveStructuredShape(space, agents));
       default:
-        throw new Error(`Unknown strategy ${type}`);
+        throw new Error(`Unknown strategy ${space.strategy}`);
     }
   }
 

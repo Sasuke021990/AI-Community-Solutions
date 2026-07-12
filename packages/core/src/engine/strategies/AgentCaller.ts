@@ -52,10 +52,11 @@ export function extractFinalAnswer(content: string): string | undefined {
 export async function callAgent(
   state: ExecutionState,
   agent: Agent,
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  roundStartMeta?: Record<string, unknown>
 ): Promise<ChatMessage> {
   const model = agent.modelId || state.space.defaultModel;
-  state.onEvent({ type: RunEventType.RoundStart, agentId: agent.id, payload: { model } });
+  state.onEvent({ type: RunEventType.RoundStart, agentId: agent.id, payload: { model, ...roundStartMeta } });
 
   const working = [...messages];
   let iterations = 0;

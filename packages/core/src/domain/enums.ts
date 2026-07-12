@@ -1,7 +1,8 @@
 export enum Strategy {
   Orchestrator = 'orchestrator',
   RoundRobin = 'round-robin',
-  Debate = 'debate'
+  Debate = 'debate',
+  Structured = 'structured'
 }
 
 export enum SpaceStatus {

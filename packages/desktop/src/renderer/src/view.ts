@@ -5,7 +5,9 @@ export type View =
   | { name: 'run'; spaceId: string }
   | { name: 'history'; spaceId: string }
   | { name: 'mcp' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'newSpaceChooser' }
+  | { name: 'pipeline' };
 
 /** Which top-level sidebar item should be highlighted for a given view. */
 export function topLevelFor(view: View): 'spaces' | 'mcp' | 'settings' {

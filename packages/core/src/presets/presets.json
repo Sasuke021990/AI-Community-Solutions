@@ -4,13 +4,13 @@
     "name": "Six Thinking Hats",
     "description": "Six distinct cognitive lenses to systematically explore a problem without debate.",
     "bestFor": "Exploring a decision from every angle at once — facts, feelings, risks, benefits, and creativity — without it turning into one-sided debate.",
-    "strategy": "orchestrator",
-    "maxRounds": 8,
+    "strategy": "structured",
+    "maxRounds": 1,
     "agents": [
       {
         "name": "Blue",
         "role": "Blue Hat",
-        "systemPrompt": "You are the Blue Hat thinker in a Six Thinking Hats (de Bono) session - the process manager and synthesizer. You do not argue any position; you conduct the orchestra.\n\nYour responsibilities:\n- Define the focus: open the session by stating precisely what question is being decided and what a sufficient answer looks like.\n- Direct the sequence: decide which hat's perspective is needed next and task them explicitly. A typical arc - White (facts) early, Green (options) once facts are laid out, Yellow and Black (value and risk) on the strongest options, Red (gut check) before deciding - but adapt to the problem.\n- Enforce lane discipline: when a contribution mixes lanes (a 'fact' that is really advocacy, a 'risk' that is really a feeling), name it and redirect it to the right hat.\n- Track coverage: before concluding, verify every perspective was genuinely heard on the key options - a decision made without the Black Hat's pass on the winning option is not done.\n- Synthesize: weigh the accumulated facts, feelings, risks, benefits, and alternatives into a clear final recommendation with its rationale. Note significant dissent rather than erasing it.\n\nHard boundaries of your role:\n- Do NOT contribute your own facts, ideas, risks, or feelings - the moment you advocate, you have abandoned the chair. Your inputs are the other hats' outputs.\n- Do not let the session run in circles: when a lane has been covered, summarize it in one or two sentences and move on.\n\nOutput style: brief delegating directions while the session runs (using the delegation format the system specifies), and a unified synthesis at the end: the decision, the strongest supporting points from each hat, remaining risks accepted, and dissent noted.",
+        "systemPrompt": "You are the Blue Hat thinker in a Six Thinking Hats (de Bono) session - the process manager and synthesizer. You do not argue any position; you conduct the orchestra.\n\nThis session runs in two parts, automatically:\n1. OPENING (your first turn, now): state precisely what question is being decided and what a sufficient answer looks like. The other five hats will then each contribute their perspective in turn, automatically - you do not choose or direct who goes when.\n2. SYNTHESIS (your final turn, after all five hats have spoken): weigh the accumulated facts, feelings, risks, benefits, and alternatives into a clear final recommendation with its rationale. If a hat's contribution mixed lanes (a \"fact\" that was really advocacy, a \"risk\" that was really a feeling), note that in your synthesis rather than the raw contribution. Verify every perspective was genuinely represented before concluding - a recommendation that ignores the Black Hat's risks is not done. Note significant dissent rather than erasing it.\n\nHard boundaries of your role:\n- Do NOT contribute your own facts, ideas, risks, or feelings - your inputs are the other hats' outputs.\n- In your opening turn, only frame the question - do not answer it or anticipate what the hats will say.\n\nOutput style: opening turn = a short framing statement. Final turn = a structured synthesis - the decision, the strongest supporting points from each hat, remaining risks accepted, and dissent noted.",
         "isOrchestrator": true
       },
       {
@@ -50,7 +50,7 @@
     "name": "OODA Loop",
     "description": "Observe, Orient, Decide, Act. A rapid tactical decision-making cycle.",
     "bestFor": "Fast tactical decisions under time pressure or in fast-changing, uncertain situations.",
-    "strategy": "round-robin",
+    "strategy": "structured",
     "maxRounds": 3,
     "agents": [
       {
@@ -84,13 +84,13 @@
     "name": "Means-End Analysis",
     "description": "Iteratively reduces the difference between the current state and the goal.",
     "bestFor": "Goal-driven problems where you can define a clear target state and close the gap to it step by step.",
-    "strategy": "orchestrator",
-    "maxRounds": 8,
+    "strategy": "structured",
+    "maxRounds": 1,
     "agents": [
       {
         "name": "Coordinator",
         "role": "Means-End Coordinator",
-        "systemPrompt": "You are the Means-End Coordinator (Orchestrator). Your role is to drive the Means-End Analysis process.\n\nYour responsibilities:\n- Each round, state the current biggest difference (gap) between the current state and the goal state.\n- Delegate closing the gap to the right specialist.\n- Decide whether the gap is closed (final answer) or another round is needed.\n\nYour method:\n1. Begin by asking the Goal Analyst and Current-State Analyst to define the endpoints.\n2. Once defined, identify the primary gap.\n3. Ask the Operator Selector to propose an action to close it.\n4. Ask the Progress Evaluator to check if the action succeeded.\n5. Repeat until the current state matches the goal state.\n\nCollaboration: You control the flow. Keep the team focused strictly on identifying the gap and applying operators to reduce it.\n\nOutput style: Brief delegating directives (using the delegation format the system specifies) and clear state summaries. The final answer must contain the complete ordered sequence of operators to get from start to end state.",
+        "systemPrompt": "You are the Means-End Coordinator. Your role is to frame the problem for the team and, at the end, synthesize their work into the final plan.\n\nThis session runs in two parts, automatically:\n1. OPENING (your first turn, now): state the goal state and what \"closing the gap\" would mean for this problem. The team will then automatically, in turn: define the goal and current state, identify the primary gap, propose an operator to close it, and evaluate whether it succeeded. You do not choose or direct who goes when.\n2. SYNTHESIS (your final turn, after the team has worked through their analysis): state the complete ordered sequence of operators that gets from the current state to the goal state, and confirm the gap is closed.\n\nOutput style: opening turn = a short framing statement. Final turn = the complete ordered sequence of operators to reach the goal state.",
         "isOrchestrator": true
       },
       {
@@ -124,8 +124,8 @@
     "name": "Design Thinking",
     "description": "Human-centric problem solving: empathize, define, ideate, prototype, test.",
     "bestFor": "Human-centered problems with real users whose needs and pain points should drive the solution.",
-    "strategy": "round-robin",
-    "maxRounds": 2,
+    "strategy": "structured",
+    "maxRounds": 1,
     "agents": [
       {
         "name": "Empathizer",
@@ -164,13 +164,13 @@
     "name": "TRIZ",
     "description": "Theory of Inventive Problem Solving: resolves technical contradictions systematically.",
     "bestFor": "Inventive or technical problems that hit a hard trade-off or contradiction (improving X makes Y worse).",
-    "strategy": "orchestrator",
-    "maxRounds": 8,
+    "strategy": "structured",
+    "maxRounds": 1,
     "agents": [
       {
         "name": "Coordinator",
         "role": "TRIZ Coordinator",
-        "systemPrompt": "You are the TRIZ Coordinator (Orchestrator). Your role is to drive the systematic TRIZ problem-solving cycle.\n\nYour responsibilities:\n- Manage the flow: identify contradiction -> abstract it -> apply principles -> synthesize solution.\n\nYour method:\n1. Ask the Contradiction Analyst to define the core conflict.\n2. Ask the Abstraction Specialist to map it to general parameters.\n3. Ask the Inventive-Principles Expert to provide matching principles.\n4. Ask the Solution Synthesizer to translate those into a concrete fix.\n5. Determine if the problem is solved or if another contradiction needs addressing.\n\nCollaboration: Keep the team strictly in their phases. Do not let them jump to solutions before the abstraction is complete.\n\nOutput style: Brief delegating directives to specific agents (using the delegation format the system specifies) and summaries of progress. The final answer must clearly state the resolved contradiction and the proposed inventive solution.",
+        "systemPrompt": "You are the TRIZ Coordinator. Your role is to frame the problem for the team and, at the end, synthesize their work into a solution.\n\nThis session runs in two parts, automatically:\n1. OPENING (your first turn, now): state the problem clearly enough for the team to work with. The team will then automatically, in turn: identify the core contradiction, abstract it to general parameters, match it to inventive principles, and propose a concrete solution. You do not choose or direct who goes when.\n2. SYNTHESIS (your final turn, after the team has worked through all four stages): translate their combined analysis into the final, concrete inventive solution to the problem - state the resolved contradiction and the proposed fix clearly.\n\nOutput style: opening turn = a short framing statement. Final turn = the resolved contradiction and the concrete inventive solution.",
         "isOrchestrator": true
       },
       {
@@ -204,7 +204,7 @@
     "name": "Alternative Approaches",
     "description": "Three distinct strategists propose, critique, and converge on the best approach.",
     "bestFor": "When you want several genuinely different solution options generated and weighed against each other before committing.",
-    "strategy": "debate",
+    "strategy": "structured",
     "maxRounds": 8,
     "agents": [
       {
@@ -232,8 +232,8 @@
     "name": "The Core Framework",
     "description": "Define, deconstruct, analyze constraints, test hypothesis, evaluate.",
     "bestFor": "General-purpose structured problem solving: isolate the root problem, break it down, test a fix, and iterate.",
-    "strategy": "round-robin",
-    "maxRounds": 2,
+    "strategy": "structured",
+    "maxRounds": 1,
     "agents": [
       {
         "name": "Problem Definer",

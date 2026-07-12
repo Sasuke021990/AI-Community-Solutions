@@ -28,7 +28,6 @@ export class OrchestratorStrategy implements AgentStrategy {
     const orchestrator = state.agents.find((a) => a.isOrchestrator);
     if (!orchestrator) throw new Error('Orchestrator not found');
     const workers = state.agents.filter((a) => !a.isOrchestrator);
-    const remainingWorkers = workers.filter((w) => !this.delegatedWorkerIds.has(w.id));
 
     const plannerGuidance =
       workers.length > 0
@@ -41,13 +40,9 @@ export class OrchestratorStrategy implements AgentStrategy {
             `Rules:`,
             `- Prose like "WorkerName: do X" does NOT delegate — ONLY <task agent="..."> blocks trigger a worker.`,
             `- Delegate real work every turn until the problem is solved; do not just narrate.`,
-            `- Every worker must be consulted at least once before you may give a final answer — this is a ` +
-              `multi-perspective session; skipping a worker, or answering the problem yourself, is not allowed.`,
+            `- You must consult at least one worker before you may give a final answer. Answering without consulting anyone is not allowed.`,
             `- Prefer delegating to SEVERAL workers at once (multiple <task> blocks in one response) rather ` +
-              `than one worker per turn, so you don't run out of rounds before everyone has contributed.`,
-            remainingWorkers.length > 0 && remainingWorkers.length < workers.length
-              ? `- Not yet consulted: ${remainingWorkers.map((w) => w.name).join(', ')}. Delegate to all of them now.`
-              : '',
+              `than one worker per turn, so you don't run out of rounds.`,
             `- When the problem is fully solved, output <final_answer>...</final_answer> and nothing else.`
           ]
             .filter(Boolean)
@@ -59,11 +54,10 @@ export class OrchestratorStrategy implements AgentStrategy {
     state.messages.push({ role: 'assistant', content: `ORCHESTRATOR: ${planMsg.content}` });
 
     const finalAnswer = extractFinalAnswer(planMsg.content);
-    // A final answer offered before every worker has been consulted defeats
+    // A final answer offered before ANY worker has been consulted defeats
     // the point of a multi-agent Space - reject it and force delegation to
-    // whoever's left, rather than letting the orchestrator wrap up early
-    // (or skip straight to answering the problem itself).
-    const prematureFinalAnswer = !!finalAnswer && remainingWorkers.length > 0;
+    // at least one worker.
+    const prematureFinalAnswer = !!finalAnswer && this.delegatedWorkerIds.size === 0 && workers.length > 0;
     if (finalAnswer && !prematureFinalAnswer) return { finalAnswer };
 
     const tasks = parseTaskAssignments(planMsg.content);
@@ -83,10 +77,9 @@ export class OrchestratorStrategy implements AgentStrategy {
       state.messages.push({
         role: 'user',
         content: prematureFinalAnswer
-          ? `SYSTEM: You gave a final answer, but ${remainingWorkers.map((w) => w.name).join(', ')} ` +
-            `${remainingWorkers.length === 1 ? 'has' : 'have'} not been consulted yet. Delegate to ` +
-            `${remainingWorkers.length === 1 ? 'them' : 'all of them'} now, using ` +
-            '<task agent="WorkerName">task</task> — do not answer until everyone has contributed.'
+          ? `SYSTEM: You gave a final answer, but no workers have been consulted yet. Delegate to ` +
+            `at least one worker now, using ` +
+            '<task agent="WorkerName">task</task> — do not answer until you have consulted the team.'
           : 'SYSTEM: You neither delegated a subtask nor gave a final answer. You MUST either delegate using ' +
             'the exact format <task agent="WorkerName">task</task>, or output <final_answer>...</final_answer>. Do one now.'
       });

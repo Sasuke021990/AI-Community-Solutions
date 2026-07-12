@@ -69,4 +69,14 @@ describe('validateSpaceForPublish', () => {
     const agents = [mkAgent({ id: 'a1', isOrchestrator: false }), mkAgent({ id: 'a2', isOrchestrator: false })];
     expect(validateSpaceForPublish(mkSpace(Strategy.RoundRobin), agents)).toEqual([]);
   });
+
+  it('structured: accepts 0 or 1 framer with >=1 worker, rejects 2 framers or 0 workers', () => {
+    const sp = mkSpace(Strategy.Structured);
+    expect(validateSpaceForPublish(sp, [mkAgent({ id: 'a1' })])).toEqual([]); // 0 framers, 1 worker
+    expect(validateSpaceForPublish(sp, [mkAgent({ id: 'a1', isOrchestrator: true }), mkAgent({ id: 'a2' })])).toEqual([]); // 1 framer + worker
+    expect(validateSpaceForPublish(sp, [mkAgent({ id: 'a1', isOrchestrator: true })]).length).toBeGreaterThan(0); // no worker
+    expect(validateSpaceForPublish(sp, [
+      mkAgent({ id: 'a1', isOrchestrator: true }), mkAgent({ id: 'a2', isOrchestrator: true }), mkAgent({ id: 'a3' })
+    ]).length).toBeGreaterThan(0); // 2 framers
+  });
 });

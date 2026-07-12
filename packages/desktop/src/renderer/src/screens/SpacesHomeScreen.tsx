@@ -5,11 +5,12 @@ import { StatusBadge } from '../components/StatusBadge.js';
 
 interface SpacesHomeScreenProps {
   onOpenPresets: () => void;
-  onOpenBuilder: (spaceId: string | null) => void;
+  onOpenBuilder: (spaceId: string) => void;
+  onNewSpace: () => void;
   onOpenRun: (spaceId: string) => void;
 }
 
-export function SpacesHomeScreen({ onOpenPresets, onOpenBuilder, onOpenRun }: SpacesHomeScreenProps) {
+export function SpacesHomeScreen({ onOpenPresets, onOpenBuilder, onNewSpace, onOpenRun }: SpacesHomeScreenProps) {
   const [spaces, setSpaces] = useState<SpaceWithActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +55,7 @@ export function SpacesHomeScreen({ onOpenPresets, onOpenBuilder, onOpenRun }: Sp
           <button className="btn" onClick={onOpenPresets}>
             Explore Presets
           </button>
-          <button className="btn btn-primary" onClick={() => onOpenBuilder(null)}>
+          <button className="btn btn-primary" onClick={onNewSpace}>
             New Space
           </button>
         </div>
