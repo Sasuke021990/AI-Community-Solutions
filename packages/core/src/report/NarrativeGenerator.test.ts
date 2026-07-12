@@ -63,6 +63,15 @@ describe('NarrativeGenerator', () => {
     expect(allQuotesVerified(validNarrative, mockInput.agents, mockInput.events)).toBe(true);
   });
 
+  it('tolerates single quotes and whitespace around = in the quote tag (still verified)', () => {
+    const validNarrative = `He said <quote agent = 'White Hat'>The data is clear.</quote>`;
+    expect(allQuotesVerified(validNarrative, mockInput.agents, mockInput.events)).toBe(true);
+
+    // A fabricated quote in the lenient syntax must still fail.
+    const invalidNarrative = `He said <quote agent='White Hat'>Fabricated words of sufficient length.</quote>`;
+    expect(allQuotesVerified(invalidNarrative, mockInput.agents, mockInput.events)).toBe(false);
+  });
+
   it('rejects short trivial quotes', () => {
     const trivialQuote = `He said <quote agent="White Hat">The</quote>`; // < 15 chars
     expect(allQuotesVerified(trivialQuote, mockInput.agents, mockInput.events)).toBe(false);

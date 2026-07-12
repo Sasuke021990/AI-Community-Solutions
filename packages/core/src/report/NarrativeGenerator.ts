@@ -6,6 +6,17 @@ import { Agent, RunEvent } from '../domain/types.js';
 
 export const MAX_TRANSCRIPT_CHARS = 12000;
 
+/**
+ * The one quote-tag pattern, tolerant of single/double quotes and whitespace
+ * around `=` (same leniency as parseTaskAssignments). The renderer's tag ->
+ * blockquote conversion MUST use this same pattern: anything this validator
+ * skips must also stay unconverted, or an unverified quote could render as an
+ * attributed one. Global regexes are stateful, so expose a factory.
+ */
+export function quoteTagRegex(): RegExp {
+  return /<quote\s+agent\s*=\s*["']([^"']+)["']\s*>([\s\S]*?)<\/quote>/g;
+}
+
 export interface NarrativeResult {
   keyPoints: string[];
   narrativeMarkdown: string;
@@ -81,7 +92,7 @@ function normalizeWhitespace(text: string): string {
 }
 
 export function allQuotesVerified(narrativeMarkdown: string, agents: Agent[], events: RunEvent[]): boolean {
-  const quoteRegex = /<quote agent="([^"]+)">([\s\S]*?)<\/quote>/g;
+  const quoteRegex = quoteTagRegex();
   let match;
   
   while ((match = quoteRegex.exec(narrativeMarkdown)) !== null) {

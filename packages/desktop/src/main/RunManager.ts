@@ -103,7 +103,14 @@ export class RunManager {
             let narrative;
             const narrativeModel = this.getNarrativeModel();
             if (narrativeModel !== 'None (Raw Transcript)') {
-              narrative = await generateNarrative({ run: finalRun, space, agents, events }, this.getLmStudioClient(), narrativeModel);
+              // A narrative failure must degrade to the plain layout, never
+              // cost the user the whole PDF - so it may not reach the outer
+              // catch (which skips writePdf entirely).
+              narrative = await generateNarrative(
+                { run: finalRun, space, agents, events },
+                this.getLmStudioClient(),
+                narrativeModel
+              ).catch(() => undefined);
             }
 
             const report = renderRunReport({ run: finalRun, space, agents, events, narrative });

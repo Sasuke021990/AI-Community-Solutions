@@ -135,7 +135,8 @@ export const SettingsPatchSchema = z.object({
   concurrencyCap: z.number().int().min(1).max(8).optional(),
   reportsFolder: z.string().min(1).optional(),
   firstTokenTimeoutSec: z.number().int().min(10).max(900).optional(),
-  interTokenTimeoutSec: z.number().int().min(10).max(900).optional()
+  interTokenTimeoutSec: z.number().int().min(10).max(900).optional(),
+  narrativeModel: z.string().min(1).optional()
 });
 
 // ---- Presets ----------------------------------------------------------------------------

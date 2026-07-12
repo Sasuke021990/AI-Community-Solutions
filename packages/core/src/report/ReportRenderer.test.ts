@@ -85,4 +85,21 @@ describe('ReportRenderer', () => {
     expect(html.bodyHtml).toContain('<blockquote>'); // from markdown rendering of '> "I am on it."'
     expect(html.bodyHtml).not.toContain('class="card"');
   });
+
+  it('converts single-quoted tags and flattens multi-line quotes into one blockquote', () => {
+    const run: Run = { id: 'r1', spaceId: 's1', problem: 'Q', status: RunStatus.Completed, roundsUsed: 1, startedAt: 1000, finalAnswer: 'A' };
+    const html = renderRunReport({
+      run, space, agents, events: [],
+      narrative: {
+        keyPoints: ['KP'],
+        narrativeMarkdown: `He said <quote agent='Detective'>line one\nline two</quote>`
+      }
+    });
+
+    // Single-quoted tag converted (same lenient pattern as the validator),
+    // and the multi-line quote flattened so no fragment escapes the blockquote.
+    expect(html.bodyHtml).toContain('— Detective');
+    expect(html.bodyHtml).toContain('line one line two');
+    expect(html.bodyHtml).not.toContain('quote agent');
+  });
 });

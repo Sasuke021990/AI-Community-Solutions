@@ -2,7 +2,7 @@ import { Run, Space, Agent, RunEvent } from '../domain/types.js';
 import { RunStatus, RunEventType } from '../domain/enums.js';
 import { renderSafeMarkdown } from '../markdown/renderSafeMarkdown.js';
 import { listSpacePresets } from '../presets/spacePresets.js';
-import type { NarrativeResult } from './NarrativeGenerator.js';
+import { quoteTagRegex, type NarrativeResult } from './NarrativeGenerator.js';
 
 export interface RunReportInput {
   run: Run;
@@ -86,8 +86,14 @@ export function renderRunReport(input: RunReportInput): RunReportHtml {
   bodyHtml += `<h2>Full Conversation</h2>`;
 
   if (input.narrative) {
-    let markdown = input.narrative.narrativeMarkdown;
-    markdown = markdown.replace(/<quote agent="([^"]+)">([\s\S]*?)<\/quote>/g, '\n\n> "$2"\n> — $1\n\n');
+    // Same pattern the validator used - anything it skipped stays unconverted.
+    // Quote text is flattened to one line so a multi-line quote doesn't fall
+    // out of the single-line blockquote markdown; validation compares
+    // whitespace-normalized text, so this stays faithful to the original.
+    const markdown = input.narrative.narrativeMarkdown.replace(
+      quoteTagRegex(),
+      (_m, role: string, text: string) => `\n\n> "${text.replace(/\s+/g, ' ').trim()}"\n> — ${role}\n\n`
+    );
     bodyHtml += `<div class="narrative-body" style="margin-bottom: 40px;">${renderSafeMarkdown(markdown)}</div>`;
   } else {
     let inCard = false;

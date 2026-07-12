@@ -84,6 +84,10 @@ describe('SettingsPatchSchema', () => {
   it('rejects a non-URL lmStudioBaseUrl', () => {
     expect(() => SettingsPatchSchema.parse({ lmStudioBaseUrl: 'not a url' })).toThrow();
   });
+
+  it('preserves narrativeModel through parsing (zod strips unknown keys - it must be in the schema)', () => {
+    expect(SettingsPatchSchema.parse({ narrativeModel: 'my-model' })).toEqual({ narrativeModel: 'my-model' });
+  });
 });
 
 describe('Channels registry', () => {

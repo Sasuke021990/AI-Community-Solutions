@@ -111,6 +111,47 @@ describe('RunManager', () => {
     ]);
   });
 
+  it('renders the narrative report when a narrative model is configured and quotes verify', async () => {
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+    vi.spyOn(lmClient, 'chat').mockImplementation(async (req) => {
+      const sys = typeof req.messages[0]?.content === 'string' ? req.messages[0].content : '';
+      if (sys.includes('professional report writer')) {
+        // Quote must be an exact substring of the agent's real message below.
+        return {
+          message: {
+            role: 'assistant',
+            content:
+              '[KEY_POINTS]\n- The cat was located\n[/KEY_POINTS]\n' +
+              '[NARRATIVE]\nR reported that <quote agent="R">The cat sat on the mat happily.</quote>\n[/NARRATIVE]'
+          }
+        };
+      }
+      return { message: { role: 'assistant', content: 'The cat sat on the mat happily. <final_answer>done</final_answer>' } };
+    });
+
+    repos.spaces.create(mkSpace({ status: SpaceStatus.Draft }));
+    repos.agents.create({ id: 'a1', spaceId: 's1', name: 'A', role: 'R', systemPrompt: 'sys', isOrchestrator: false, position: 0 });
+    repos.spaces.publish('s1');
+
+    const manager = new RunManager(repos, () => lmClient, () => new ConcurrencyLimiter(2), (channel, payload) =>
+      broadcasts.push({ channel, payload }),
+      () => '/tmp/reports',
+      writePdfMock,
+      () => 'narrative-model'  // a real model, not the 'None (Raw Transcript)' sentinel
+    );
+    await manager.startRun('s1', 'solve it');
+
+    await vi.waitFor(() => {
+      expect(broadcasts.some((b) => b.channel === RUN_STATUS_PUSH_CHANNEL)).toBe(true);
+    });
+
+    expect(writePdfMock).toHaveBeenCalled();
+    const report = writePdfMock.mock.calls[0][0] as { bodyHtml: string };
+    expect(report.bodyHtml).toContain('narrative-body');
+    expect(report.bodyHtml).toContain('Key Points');
+    expect(report.bodyHtml).not.toContain('class="card"');
+  });
+
   it('swallows PDF generation failures so the run remains completed', async () => {
     vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
     vi.spyOn(lmClient, 'chat').mockResolvedValue({
