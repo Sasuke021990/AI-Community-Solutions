@@ -445,10 +445,6 @@ table.list-table tr:hover td {
   margin-top: 16px;
 }
 
-.loading-dots::after {
-  content: '...';
-}
-
 .section-title {
   font-size: 13px;
   font-weight: 600;

@@ -14,7 +14,7 @@ import {
   Space
 } from '@acs/core';
 import { RunManager } from './RunManager.js';
-import { RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL } from '../shared/ipc.js';
+import { RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL, RUN_TOKEN_PUSH_CHANNEL } from '../shared/ipc.js';
 
 function mkSpace(over: Partial<Space> = {}): Space {
   return {
@@ -82,6 +82,32 @@ describe('RunManager', () => {
     expect(run?.finalAnswer).toBe('done');
     expect(writePdfMock).toHaveBeenCalled();
     expect(run?.pdfPath).toBeDefined();
+  });
+
+  it('broadcasts live token deltas on RUN_TOKEN_PUSH_CHANNEL, tagged with the runId', async () => {
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+    vi.spyOn(lmClient, 'chat').mockImplementation(async (_req, onToken) => {
+      onToken('Hel');
+      onToken('lo');
+      return { message: { role: 'assistant', content: '<final_answer>done</final_answer>' } };
+    });
+
+    repos.spaces.create(mkSpace({ status: SpaceStatus.Draft }));
+    repos.agents.create({ id: 'a1', spaceId: 's1', name: 'A', role: 'R', systemPrompt: 'sys', isOrchestrator: false, position: 0 });
+    repos.spaces.publish('s1');
+
+    const manager = makeManager();
+    const { runId } = await manager.startRun('s1', 'solve it');
+
+    await vi.waitFor(() => {
+      expect(broadcasts.some((b) => b.channel === RUN_STATUS_PUSH_CHANNEL)).toBe(true);
+    });
+
+    const tokenBroadcasts = broadcasts.filter((b) => b.channel === RUN_TOKEN_PUSH_CHANNEL);
+    expect(tokenBroadcasts.map((b) => b.payload)).toEqual([
+      { runId, agentId: 'a1', token: 'Hel' },
+      { runId, agentId: 'a1', token: 'lo' }
+    ]);
   });
 
   it('swallows PDF generation failures so the run remains completed', async () => {

@@ -185,6 +185,56 @@ describe('RunOrchestrator', () => {
     expect(received.length).toBe(eventRepo.listByRun('r1').length);
   });
 
+  it('streams live token deltas to onToken subscribers, tagged by agentId', async () => {
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+    vi.spyOn(lmClient, 'chat').mockImplementation(async (_req, onToken) => {
+      onToken('Hel');
+      onToken('lo');
+      return { message: { role: 'assistant', content: '<final_answer>hi</final_answer>' } };
+    });
+
+    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    spaceRepo.create(space);
+    runRepo.create(run);
+
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+    const received: { agentId: string; token: string }[] = [];
+    const unsub = engine.onToken((agentId, token) => received.push({ agentId, token }));
+
+    await engine.start();
+    unsub();
+
+    expect(received).toEqual([
+      { agentId: 'a1', token: 'Hel' },
+      { agentId: 'a1', token: 'lo' }
+    ]);
+  });
+
+  it('does not throw when no onToken subscriber is registered', async () => {
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+    vi.spyOn(lmClient, 'chat').mockImplementation(async (_req, onToken) => {
+      onToken('token with nobody listening');
+      return { message: { role: 'assistant', content: '<final_answer>hi</final_answer>' } };
+    });
+
+    const space = mkSpace({ strategy: Strategy.RoundRobin });
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [{ id: 'a1', spaceId: 's1', name: 'A', role: 'A', systemPrompt: 'A', isOrchestrator: false, position: 1 }];
+    spaceRepo.create(space);
+    runRepo.create(run);
+
+    // No engine.onToken(...) subscription at all - callAgent's `state.onToken?.(...)`
+    // must be a safe no-op, and the run must still complete normally.
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter());
+    await engine.start();
+
+    expect(runRepo.get('r1')?.status).toBe(RunStatus.Completed);
+  });
+
   it('aborts other in-flight concurrent calls when one call in a Promise.all batch fails', async () => {
     const lmClient = new LmStudioClient();
     vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
