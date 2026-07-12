@@ -143,6 +143,10 @@ export const SettingsPatchSchema = z.object({
 
 export const SpaceCreateFromPresetSchema = z.object({ presetId: z.string().min(1) });
 
+// ---- Models -----------------------------------------------------------------------------
+
+export const ModelsListSchema = z.object({ baseUrl: z.string().url().optional() });
+
 // ---- Channel registry -------------------------------------------------------------------
 
 export const Channels = {
@@ -180,7 +184,7 @@ export const Channels = {
   runsOpenPdf: defineChannel('runs:openPdf', PathSchema),
   runsShowInFolder: defineChannel('runs:showInFolder', PathSchema),
 
-  modelsList: defineChannel('models:list', EmptySchema),
+  modelsList: defineChannel('models:list', ModelsListSchema),
 
   settingsGet: defineChannel('settings:get', EmptySchema),
   settingsSet: defineChannel('settings:set', SettingsPatchSchema),

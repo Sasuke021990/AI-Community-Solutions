@@ -138,7 +138,7 @@ const api = {
     showPdfInFolder: (path: string) => invoke<void>(Channels.runsShowInFolder.name, { path })
   },
   models: {
-    list: () => invoke<{ models: string[] }>(Channels.modelsList.name)
+    list: (baseUrl?: string) => invoke<{ models: string[] }>(Channels.modelsList.name, { baseUrl })
   },
   settings: {
     get: () => invoke<Settings>(Channels.settingsGet.name),

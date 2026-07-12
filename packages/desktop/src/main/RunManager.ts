@@ -94,6 +94,13 @@ export class RunManager {
         this.active.delete(run.id);
         const finalRun = this.repos.runs.get(run.id);
         if (finalRun) {
+          // The conversation itself is already done and persisted at this
+          // point (RunOrchestrator.start() already wrote the terminal status
+          // + finalAnswer) - broadcast it now, before the narrative/PDF work
+          // below, so the UI reflects completion immediately instead of
+          // staying stuck on "running" for the entire report-generation
+          // window (which can take minutes with a narrative model).
+          this.broadcast(RUN_STATUS_PUSH_CHANNEL, finalRun);
           try {
             this.broadcast(RUN_REPORT_GENERATION_CHANNEL, { runId: finalRun.id, isGenerating: true });
             const space = this.repos.spaces.get(finalRun.spaceId)!;

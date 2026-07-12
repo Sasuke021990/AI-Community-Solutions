@@ -13,18 +13,35 @@ interface SettingsForm {
 export function SettingsScreen() {
   const [form, setForm] = useState<SettingsForm | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [testing, setTesting] = useState(false);
 
+  // Always probes whatever URL is currently in the field (even unsaved), not
+  // the persisted settings - Refresh/Test should reflect what's typed, live.
+  async function loadModels(baseUrl?: string) {
+    setLoadingModels(true);
+    try {
+      const { models } = await call(window.acs.models.list(baseUrl));
+      setAvailableModels(models);
+      setModelsError(null);
+    } catch (e) {
+      setModelsError((e as Error).message);
+    } finally {
+      setLoadingModels(false);
+    }
+  }
+
   useEffect(() => {
     call(window.acs.settings.get())
-      .then(setForm)
+      .then((s) => {
+        setForm(s);
+        loadModels(s.lmStudioBaseUrl);
+      })
       .catch((e: Error) => setError(e.message));
-    call(window.acs.models.list())
-      .then(res => setAvailableModels(res.models))
-      .catch(() => {});
   }, []);
 
   async function save() {
@@ -42,10 +59,13 @@ export function SettingsScreen() {
   }
 
   async function testConnection() {
+    if (!form) return;
     setTesting(true);
     setTestResult(null);
     try {
-      const { models } = await call(window.acs.models.list());
+      const { models } = await call(window.acs.models.list(form.lmStudioBaseUrl));
+      setAvailableModels(models);
+      setModelsError(null);
       setTestResult({ ok: true, message: `Connected - ${models.length} model(s) available.` });
     } catch (e) {
       setTestResult({ ok: false, message: (e as Error).message });
@@ -136,7 +156,12 @@ export function SettingsScreen() {
         </div>
 
         <div className="field">
-          <label>Narrative Summary Model</label>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <label style={{ margin: 0 }}>Narrative Summary Model</label>
+            <button type="button" className="btn-link" onClick={() => loadModels(form.lmStudioBaseUrl)} disabled={loadingModels}>
+              {loadingModels ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
           <select
             value={form.narrativeModel}
             onChange={(e) => setForm({ ...form, narrativeModel: e.target.value })}
@@ -152,6 +177,12 @@ export function SettingsScreen() {
           <div className="field-hint">
             Model used to generate a narrative summary of the report. Set to &quot;None&quot; to skip LLM summarization.
           </div>
+          {modelsError && (
+            <div className="field-error">Could not load models: {modelsError}. Check LM Studio is running, then Refresh.</div>
+          )}
+          {!modelsError && availableModels.length === 0 && !loadingModels && (
+            <div className="field-hint">No models loaded yet — is LM Studio running with a model loaded?</div>
+          )}
         </div>
 
         <div className="row">

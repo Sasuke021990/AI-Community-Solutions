@@ -212,6 +212,74 @@ describe('OrchestratorStrategy', () => {
     const r3 = await strat.executeRound(state);
     expect(r3.halt).toBe(true);
   });
+
+  it('rejects a final answer offered before ever delegating, then halts if it persists', async () => {
+    const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
+    const researcher = agent({ id: 'w1', name: 'Researcher' });
+    const state = makeState({ agents: [orchestrator, researcher] });
+
+    // The orchestrator answers directly, using its own tools/reasoning,
+    // without ever emitting a <task> block - exactly the "only Blue ran"
+    // regression this guards against.
+    vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
+      message: { role: 'assistant', content: '<final_answer>I solved it myself</final_answer>' }
+    });
+
+    const strat = new OrchestratorStrategy();
+
+    // Round 1: rejected - nudged to delegate instead of answering.
+    const r1 = await strat.executeRound(state);
+    expect(r1.finalAnswer).toBeUndefined();
+    expect(r1.halt).toBeUndefined();
+    expect(state.messages[state.messages.length - 1].content).toContain(
+      'You provided a final answer without ever delegating to a worker'
+    );
+
+    // Round 2: still refuses to delegate -> halts (same safety net as the
+    // no-progress guard), rather than looping until maxRounds/timeout.
+    const r2 = await strat.executeRound(state);
+    expect(r2.halt).toBe(true);
+    expect(r2.finalAnswer).toBeUndefined();
+  });
+
+  it('accepts a final answer once at least one real delegation has happened', async () => {
+    const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
+    const researcher = agent({ id: 'w1', name: 'Researcher' });
+    const state = makeState({ agents: [orchestrator, researcher] });
+
+    let call = 0;
+    vi.spyOn(state.lmStudioClient, 'chat').mockImplementation(async (req: ChatRequest) => {
+      const sys = req.messages[0].content;
+      if (sys.includes('orchestrator')) {
+        call++;
+        if (call === 1) {
+          return { message: { role: 'assistant', content: '<task agent="Researcher">dig</task>' } };
+        }
+        return { message: { role: 'assistant', content: '<final_answer>done after delegating</final_answer>' } };
+      }
+      return { message: { role: 'assistant', content: 'worker output' } };
+    });
+
+    const strat = new OrchestratorStrategy();
+    const r1 = await strat.executeRound(state);
+    expect(r1.finalAnswer).toBeUndefined(); // round 1: real delegation happens
+
+    const r2 = await strat.executeRound(state);
+    expect(r2.finalAnswer).toBe('done after delegating'); // round 2: now accepted
+  });
+
+  it('does not require delegation when the orchestrator has no workers', async () => {
+    const orchestrator = agent({ id: 'o', name: 'Boss', isOrchestrator: true });
+    const state = makeState({ agents: [orchestrator] }); // no workers at all
+
+    vi.spyOn(state.lmStudioClient, 'chat').mockResolvedValue({
+      message: { role: 'assistant', content: '<final_answer>solo answer</final_answer>' }
+    });
+
+    const strat = new OrchestratorStrategy();
+    const r1 = await strat.executeRound(state);
+    expect(r1.finalAnswer).toBe('solo answer'); // accepted immediately - nothing to delegate to
+  });
 });
 
 describe('DebateStrategy', () => {

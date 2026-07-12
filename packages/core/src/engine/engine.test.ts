@@ -379,4 +379,44 @@ describe('RunOrchestrator', () => {
     expect(capturedReq.temperature).toBe(0.8);
     expect(capturedReq.frequency_penalty).toBe(0.3);
   });
+
+  it('an orchestrator that answers without delegating is forced to delegate before the run completes', async () => {
+    // Regression test for a real reported run: the orchestrator used its own
+    // tools and answered directly, so every worker (5 of 6 hats) never ran.
+    const lmClient = new LmStudioClient();
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+
+    let orchestratorCalls = 0;
+    const workersCalled = new Set<string>();
+    vi.spyOn(lmClient, 'chat').mockImplementation(async (req) => {
+      const sys = typeof req.messages[0]?.content === 'string' ? req.messages[0].content : '';
+      if (sys.includes('orchestrator')) {
+        orchestratorCalls++;
+        if (orchestratorCalls === 1) {
+          // Tries to answer immediately, without delegating - must be rejected.
+          return { message: { role: 'assistant', content: '<final_answer>I looked it up myself</final_answer>' } };
+        }
+        return { message: { role: 'assistant', content: '<task agent="Worker">do the research</task>' } };
+      }
+      workersCalled.add(sys);
+      return { message: { role: 'assistant', content: '<final_answer>done via worker</final_answer>' } };
+    });
+
+    const space = mkSpace({ strategy: Strategy.Orchestrator, maxRounds: 10 });
+    const run = { id: 'r1', spaceId: 's1', problem: 'q', status: RunStatus.Running, roundsUsed: 0, startedAt: Date.now() };
+    const agents = [
+      { id: 'o1', spaceId: 's1', name: 'Boss', role: 'Boss', systemPrompt: 'Boss', isOrchestrator: true, position: 0 },
+      { id: 'w1', spaceId: 's1', name: 'Worker', role: 'Worker', systemPrompt: 'Worker', isOrchestrator: false, position: 1 }
+    ];
+    spaceRepo.create(space);
+    runRepo.create(run);
+
+    const engine = new RunOrchestrator(run, space, agents, [], [], runRepo, eventRepo, lmClient, new ConcurrencyLimiter(1));
+    await engine.start();
+
+    // The worker actually ran (delegation happened) before the run completed.
+    expect(workersCalled.size).toBeGreaterThan(0);
+    const updated = runRepo.get('r1');
+    expect(updated?.status).toBe(RunStatus.Completed);
+  });
 });

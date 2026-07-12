@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Strategy } from '@acs/core';
-import { Channels, McpServerInputSchema, SpaceInputSchema, SpaceUpdateTemperatureSchema, AgentInputSchema, SettingsPatchSchema } from './ipc.js';
+import { Channels, McpServerInputSchema, SpaceInputSchema, SpaceUpdateTemperatureSchema, AgentInputSchema, SettingsPatchSchema, ModelsListSchema } from './ipc.js';
 
 describe('McpServerInputSchema', () => {
   it('accepts a valid stdio config and defaults enabled to true', () => {
@@ -58,6 +58,17 @@ describe('SpaceUpdateTemperatureSchema', () => {
   it('rejects a missing id or an out-of-range temperature', () => {
     expect(() => SpaceUpdateTemperatureSchema.parse({ temperature: 0.5 })).toThrow();
     expect(() => SpaceUpdateTemperatureSchema.parse({ id: 's1', temperature: 2.1 })).toThrow();
+  });
+});
+
+describe('ModelsListSchema', () => {
+  it('accepts an empty payload and a valid baseUrl override', () => {
+    expect(ModelsListSchema.parse({}).baseUrl).toBeUndefined();
+    expect(ModelsListSchema.parse({ baseUrl: 'http://127.0.0.1:9999/v1' }).baseUrl).toBe('http://127.0.0.1:9999/v1');
+  });
+
+  it('rejects a non-URL baseUrl', () => {
+    expect(() => ModelsListSchema.parse({ baseUrl: 'not a url' })).toThrow();
   });
 });
 

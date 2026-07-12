@@ -213,7 +213,14 @@ export function createIpcRouter(deps: IpcRouterDeps) {
       return undefined;
     },
 
-    [Channels.modelsList.name]: async () => ({ models: await getLmStudioClient().listModels() }),
+    [Channels.modelsList.name]: async (p) => {
+      const { baseUrl } = Channels.modelsList.requestSchema.parse(p);
+      // A baseUrl override (e.g. Settings screen probing an unsaved URL) uses
+      // a throwaway client, never the persisted one - it must reflect exactly
+      // what's currently typed, not what was last saved.
+      const client = baseUrl ? new LmStudioClient(baseUrl) : getLmStudioClient();
+      return { models: await client.listModels() };
+    },
 
     [Channels.settingsGet.name]: async () => settingsStore.get(),
 

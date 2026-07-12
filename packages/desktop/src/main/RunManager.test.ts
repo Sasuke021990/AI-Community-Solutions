@@ -111,6 +111,48 @@ describe('RunManager', () => {
     ]);
   });
 
+  it('broadcasts the completed status BEFORE the (slow) PDF write finishes, not after', async () => {
+    vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
+    vi.spyOn(lmClient, 'chat').mockResolvedValue({
+      message: { role: 'assistant', content: '<final_answer>done</final_answer>' }
+    });
+
+    repos.spaces.create(mkSpace({ status: SpaceStatus.Draft }));
+    repos.agents.create({ id: 'a1', spaceId: 's1', name: 'A', role: 'R', systemPrompt: 'sys', isOrchestrator: false, position: 0 });
+    repos.spaces.publish('s1');
+
+    // Simulate a slow PDF/narrative step: writePdf doesn't resolve until we
+    // let it, so we can observe what the run looks like while it's still
+    // "in flight" - this is exactly the window a real narrative-model call
+    // can occupy for minutes.
+    let resolveWrite!: () => void;
+    writePdfMock.mockImplementation(() => new Promise<void>((resolve) => { resolveWrite = resolve; }));
+
+    const manager = makeManager();
+    const { runId } = await manager.startRun('s1', 'solve it');
+
+    // Wait for the FIRST status broadcast - it must show the run already
+    // completed (conversation done), even though writePdf is still pending.
+    const firstStatus = await vi.waitFor(() => {
+      const b = broadcasts.find((b) => b.channel === RUN_STATUS_PUSH_CHANNEL);
+      if (!b) throw new Error('no status broadcast yet');
+      return b;
+    });
+    const firstRun = firstStatus.payload as { status: string; pdfPath?: string };
+    expect(firstRun.status).toBe(RunStatus.Completed);
+    expect(firstRun.pdfPath).toBeUndefined(); // report generation hasn't produced a file yet
+    expect(writePdfMock).not.toHaveResolved();
+
+    // Now let the PDF write finish, and confirm a second, final broadcast
+    // carries the real pdfPath.
+    resolveWrite();
+    await vi.waitFor(() => {
+      const statusBroadcasts = broadcasts.filter((b) => b.channel === RUN_STATUS_PUSH_CHANNEL);
+      expect(statusBroadcasts.some((b) => (b.payload as { pdfPath?: string }).pdfPath)).toBe(true);
+    });
+    expect(repos.runs.get(runId)?.pdfPath).toBeDefined();
+  });
+
   it('renders the narrative report when a narrative model is configured and quotes verify', async () => {
     vi.spyOn(lmClient, 'listModels').mockResolvedValue(['m']);
     vi.spyOn(lmClient, 'chat').mockImplementation(async (req) => {

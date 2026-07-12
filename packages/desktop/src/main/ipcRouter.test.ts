@@ -63,6 +63,22 @@ describe('ipcRouter', () => {
     if (!result.ok) expect(result.error.message).toMatch(/unknown channel/i);
   });
 
+  it('models:list uses the persisted client by default, but a baseUrl override when given', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [{ id: 'm1' }] }) });
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      const noOverride = await router.handle(Channels.modelsList.name, {});
+      expect(noOverride.ok).toBe(true);
+      expect(fetchSpy).toHaveBeenLastCalledWith('http://localhost:1234/v1/models', expect.anything());
+
+      const withOverride = await router.handle(Channels.modelsList.name, { baseUrl: 'http://127.0.0.1:9999/v1' });
+      expect(withOverride.ok).toBe(true);
+      expect(fetchSpy).toHaveBeenLastCalledWith('http://127.0.0.1:9999/v1/models', expect.anything());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('creates and lists an MCP server via the mcp channels', async () => {
     const create = await router.handle(Channels.mcpCreate.name, { name: 'srv', transport: 'stdio', command: 'node' });
     expect(create.ok).toBe(true);
