@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { Channels, RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL, IpcResult } from '../shared/ipc.js';
+import { Channels, RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL, RUN_TOKEN_PUSH_CHANNEL, IpcResult } from '../shared/ipc.js';
 import type {
   McpServerConfig,
   Space,
@@ -127,6 +127,8 @@ const api = {
     events: (runId: string) => invoke<RunEvent[]>(Channels.runsEvents.name, { runId }),
     onEvent: (cb: (e: PersistedRunEvent) => void) => subscribe<PersistedRunEvent>(RUN_EVENT_PUSH_CHANNEL, cb),
     onStatus: (cb: (run: Run) => void) => subscribe<Run>(RUN_STATUS_PUSH_CHANNEL, cb),
+    onToken: (cb: (p: { runId: string; agentId: string; token: string }) => void) =>
+      subscribe<{ runId: string; agentId: string; token: string }>(RUN_TOKEN_PUSH_CHANNEL, cb),
     openPdf: (path: string) => invoke<void>(Channels.runsOpenPdf.name, { path }),
     showPdfInFolder: (path: string) => invoke<void>(Channels.runsShowInFolder.name, { path })
   },

@@ -19,15 +19,27 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
   const [problem, setProblem] = useState('');
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [confirmStop, setConfirmStop] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const confirmStopBtnRef = useRef<HTMLButtonElement>(null);
+
   const seenEventIds = useRef(new Set<string>());
   const runIdRef = useRef<string | null>(null);
+  /** Ephemeral accumulator: agentId -> partial streamed text. NOT React state. */
+  const streamingRef = useRef(new Map<string, string>());
+  const [streamingVersion, setStreamingVersion] = useState(0);
+  const flushPendingRef = useRef(false);
+  const [resetScroll, setResetScroll] = useState(false);
 
   function addEvent(e: RunEvent) {
     if (seenEventIds.current.has(e.id)) return;
     seenEventIds.current.add(e.id);
+    // When the final AgentMessage lands, clear the streaming partial for that agent.
+    if (e.type === 'agent_message' && e.agentId) {
+      streamingRef.current.delete(e.agentId);
+    }
     setEvents((prev) => [...prev, e].sort((a, b) => a.seq - b.seq));
   }
 
@@ -64,19 +76,42 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
     const unsubStatus = window.acs.runs.onStatus((r: Run) => {
       if (r.id === runIdRef.current) setRun(r);
     });
+    const unsubToken = window.acs.runs.onToken(({ runId, agentId, token }) => {
+      if (runId !== runIdRef.current) return;
+      const cur = streamingRef.current.get(agentId) ?? '';
+      streamingRef.current.set(agentId, cur + token);
+      // Throttle React re-renders: batch tokens arriving within 50ms into one update.
+      if (!flushPendingRef.current) {
+        flushPendingRef.current = true;
+        setTimeout(() => {
+          flushPendingRef.current = false;
+          setStreamingVersion((v) => v + 1);
+        }, 50);
+      }
+    });
 
     setLoading(true);
     seenEventIds.current = new Set();
     setEvents([]);
     setRun(null);
     runIdRef.current = null;
+    setConfirmStop(false);
+    streamingRef.current = new Map();
+    setStreamingVersion(0);
+    setResetScroll((v) => !v); // toggle to trigger effect in RunFeed
     Promise.all([loadSpace(), loadLatestRun()]).finally(() => setLoading(false));
 
     return () => {
       unsubEvent();
       unsubStatus();
+      unsubToken();
     };
   }, [spaceId]);
+
+  // Auto-focus the confirm button whenever the stop-confirm banner appears.
+  useEffect(() => {
+    if (confirmStop) confirmStopBtnRef.current?.focus();
+  }, [confirmStop]);
 
   async function start() {
     if (!problem.trim()) return;
@@ -116,6 +151,10 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
     setEvents([]);
     setRun(null);
     setError(null);
+    setConfirmStop(false);
+    streamingRef.current = new Map();
+    setStreamingVersion(0);
+    setResetScroll((v) => !v);
   }
 
   if (loading) return <div className="empty-state">Loading...</div>;
@@ -165,9 +204,26 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
               <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>{run.problem}</span>
             </div>
             {isRunning ? (
-              <button className="btn btn-danger" onClick={stop} disabled={stopping}>
-                {stopping ? 'Stopping...' : 'Stop'}
-              </button>
+              <>
+                {confirmStop ? (
+                  <div className="banner banner-warning" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px' }}>
+                    <span>Stop this run? Progress so far will be saved as a stopped run.</span>
+                    <button
+                      ref={confirmStopBtnRef}
+                      className="btn btn-danger"
+                      onClick={async () => { setConfirmStop(false); await stop(); }}
+                      disabled={stopping}
+                    >
+                      {stopping ? 'Stopping...' : 'Confirm stop'}
+                    </button>
+                    <button className="btn" onClick={() => setConfirmStop(false)}>Cancel</button>
+                  </div>
+                ) : (
+                  <button className="btn btn-danger" onClick={() => setConfirmStop(true)}>
+                    Stop
+                  </button>
+                )}
+              </>
             ) : (
               <button className="btn" onClick={newRun} title="Clear this result and start fresh (kept in History)">
                 New run
@@ -175,7 +231,14 @@ export function RunScreen({ spaceId, onOpenHistory, onBack }: RunScreenProps) {
             )}
           </div>
 
-          <RunFeed events={events} agents={agents} live={isRunning} />
+          <RunFeed
+            events={events}
+            agents={agents}
+            live={isRunning}
+            streamingByAgent={streamingRef.current}
+            streamingVersion={streamingVersion}
+            resetScroll={resetScroll}
+          />
 
           {run.status === 'completed' && run.finalAnswer && (
             <div className="final-answer">

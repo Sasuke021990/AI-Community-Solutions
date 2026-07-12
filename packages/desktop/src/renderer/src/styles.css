@@ -471,3 +471,92 @@ table.list-table tr:hover td {
   font-size: 13px;
   color: var(--text);
 }
+
+/* ─── Phase 6: UI Polish ─────────────────────────────────────────────────── */
+
+/* Stop-confirm banner — amber/warning tone, distinct from .banner-info (blue) */
+.banner-warning {
+  background: rgba(217, 164, 65, 0.1);
+  border: 1px solid rgba(217, 164, 65, 0.4);
+  color: #f0c775;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+/* Keyboard focus ring — previously absent; now visible on every interactive element */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Step 2: Auto-scroll feed panel ─────────────────────────────────────── */
+
+.run-feed-panel {
+  position: relative;
+  max-height: min(65vh, 680px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+/* Jump-to-latest sticky pill — sits at bottom center of the scroll panel */
+.jump-latest {
+  position: sticky;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(91, 141, 239, 0.35);
+  transition: transform 150ms ease, filter 150ms ease;
+}
+.jump-latest:hover { filter: brightness(1.1); }
+.jump-latest:active { transform: translateX(-50%) translateY(1px); }
+
+/* ─── Step 3: Token streaming ─────────────────────────────────────────────── */
+
+/* Blinking cursor after streamed partial text */
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 1s step-start infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .typing-cursor { animation: none; opacity: 0.6; }
+}
+
+/* Animated "thinking" dots (::after avoids extra DOM nodes) */
+.loading-dots::after {
+  content: '...';
+  animation: pulse-dots 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dots { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots::after { animation: none; }
+}
+
+/* Active-streaming card highlight */
+.feed-turn.is-streaming {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+
+

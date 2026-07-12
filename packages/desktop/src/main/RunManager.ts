@@ -11,7 +11,7 @@ import {
   RunReportHtml,
   renderRunReport
 } from '@acs/core';
-import { RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL } from '../shared/ipc.js';
+import { RUN_EVENT_PUSH_CHANNEL, RUN_STATUS_PUSH_CHANNEL, RUN_TOKEN_PUSH_CHANNEL } from '../shared/ipc.js';
 import { join } from 'path';
 
 export type Broadcast = (channel: string, payload: unknown) => void;
@@ -79,6 +79,7 @@ export class RunManager {
     );
     this.active.set(run.id, engine);
     engine.onEvent((e: PersistedRunEvent) => this.broadcast(RUN_EVENT_PUSH_CHANNEL, e));
+    engine.onToken((agentId, token) => this.broadcast(RUN_TOKEN_PUSH_CHANNEL, { runId: run.id, agentId, token }));
 
     engine
       .start()

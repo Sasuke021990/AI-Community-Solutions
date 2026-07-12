@@ -31,6 +31,8 @@ export interface ExecutionState {
   /** Resolves a namespaced tool call; never throws (returns an error string). */
   callTool: (name: string, args: Record<string, unknown>) => Promise<string>;
   onEvent: (event: EngineEvent) => void;
+  /** Optional: called per token delta from a streaming LLM response. Never persisted. */
+  onToken?: (agentId: string, token: string) => void;
   signal?: AbortSignal;
 }
 

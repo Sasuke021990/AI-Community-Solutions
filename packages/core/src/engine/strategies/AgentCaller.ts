@@ -68,7 +68,7 @@ export async function callAgent(
             messages: working,
             tools: state.tools.length > 0 ? state.tools : undefined
           },
-          () => {},
+          (token) => state.onToken?.(agent.id, token),
           state.signal
         ),
       state.signal

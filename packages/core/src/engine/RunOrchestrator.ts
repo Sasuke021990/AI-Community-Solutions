@@ -30,6 +30,8 @@ export class RunOrchestrator {
   private toolMap = new Map<string, { mcp: McpClientWrapper; originalName: string }>();
   private webhookMap = new Map<string, WebhookConfig>();
   private listeners = new Set<(e: PersistedRunEvent) => void>();
+  /** Token subscribers — never persisted, high-frequency, ephemeral. */
+  private tokenListeners = new Set<(agentId: string, token: string) => void>();
 
   constructor(
     run: Run,
@@ -74,6 +76,11 @@ export class RunOrchestrator {
           }
         }
       },
+      onToken: (agentId, token) => {
+        for (const cb of this.tokenListeners) {
+          try { cb(agentId, token); } catch { /* subscriber error must not break the run */ }
+        }
+      },
       signal: this.abortController.signal
     };
   }
@@ -82,6 +89,12 @@ export class RunOrchestrator {
   public onEvent(cb: (e: PersistedRunEvent) => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  /** Subscribe to live token deltas. Returns an unsubscribe function. */
+  public onToken(cb: (agentId: string, token: string) => void): () => void {
+    this.tokenListeners.add(cb);
+    return () => this.tokenListeners.delete(cb);
   }
 
   private createStrategy(type: Strategy): AgentStrategy {

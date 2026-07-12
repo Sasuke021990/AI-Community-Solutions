@@ -17,6 +17,9 @@ import { Strategy } from '@acs/core';
 
 export const RUN_EVENT_PUSH_CHANNEL = 'runs:event';
 export const RUN_STATUS_PUSH_CHANNEL = 'runs:status';
+/** Token-level streaming channel — never persisted, high-frequency, ephemeral. */
+export const RUN_TOKEN_PUSH_CHANNEL = 'runs:token';
+
 
 export interface IpcError {
   code: string;
